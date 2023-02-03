@@ -5,15 +5,35 @@ use std::{
     process::exit,
 };
 
+use polling::{Event, Poller};
+
 const MAX_MESSAGE_SIZE: usize = 4096;
 
 fn main() -> Result<(), ()> {
     let socket_path = "mysocket";
     let listener = UnixListener::bind(socket_path).expect("Could not create unix socket");
 
+    listener
+        .set_nonblocking(true)
+        .expect("Failed setting listener as non-blocking.");
+
+    let poller = Poller::new().expect("Failed creating new poll");
+    let _ = poller.add(&listener, Event::readable(7));
+
+    let mut events = Vec::new();
     loop {
-        let (unix_stream, _) = listener.accept().expect("Failed accepting connection");
-        handle_stream(unix_stream)?
+        events.clear();
+        poller
+            .wait(&mut events, None)
+            .expect("Dunno man, it failed.");
+
+        for ev in &events {
+            if ev.key == 7 {
+                let (unix_stream, _) = listener.accept().expect("Failed accepting connection");
+                handle_stream(unix_stream)?;
+                let _ = poller.modify(&listener, Event::readable(7));
+            }
+        }
     }
 }
 
