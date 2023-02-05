@@ -1,13 +1,7 @@
-#![feature(read_buf)]
-use std::{
-    io::{Read, Write},
-    os::unix::net::{UnixListener, UnixStream},
-    process::exit,
-};
+use std::os::unix::net::UnixListener;
 
 use polling::{Event, Poller};
-
-const MAX_MESSAGE_SIZE: usize = 4096;
+use skaja::Stream;
 
 fn main() -> Result<(), ()> {
     let socket_path = "mysocket";
@@ -30,45 +24,24 @@ fn main() -> Result<(), ()> {
         for ev in &events {
             if ev.key == 7 {
                 let (unix_stream, _) = listener.accept().expect("Failed accepting connection");
-                handle_stream(unix_stream)?;
+                handle_stream(Stream::new(unix_stream))?;
                 let _ = poller.modify(&listener, Event::readable(7));
             }
         }
     }
 }
 
-fn handle_stream(mut stream: UnixStream) -> Result<(), ()> {
-    let mut header = vec![0u8; 4];
+fn handle_stream(mut stream: Stream) -> Result<(), ()> {
+    let nstr = stream.read_x_bytes(4);
+    let nstr = u32::from_ne_bytes(nstr.try_into().unwrap());
 
-    stream
-        .read_exact(&mut header)
-        .expect("Failed reading from stream.");
-
-    let message_len = u32::from_ne_bytes(header.try_into().unwrap());
-
-    if message_len as usize > MAX_MESSAGE_SIZE {
-        println!("Message too long! Maximum is 4096 bytes.");
-        exit(1);
+    for i in 0..nstr {
+        let str_len = u32::from_ne_bytes(stream.read_x_bytes(4).try_into().unwrap());
+        let str = stream.read_x_bytes(str_len as usize);
+        println!("Str {i} length: {str_len}");
+        println!("Str {i}: ",);
+        println!("{}", String::from_utf8_lossy(&str));
     }
-
-    let mut body = vec![0u8; message_len as usize];
-    stream
-        .read_exact(&mut body)
-        .expect("Failed reading from stream.");
-
-    println!("Received: {}", String::from_utf8_lossy(&body));
-    println!("Replying...");
-
-    let msg = "Hola!";
-    let msg_len = msg.as_bytes().len() as u32;
-    let mut resp_header = msg_len.to_ne_bytes().to_vec();
-    resp_header.append(&mut msg.as_bytes().to_owned());
-
-    stream
-        .write(&resp_header)
-        .expect("Failed writing to stream.");
-
-    println!("Replied with: {}\n", msg);
 
     Ok(())
 }
