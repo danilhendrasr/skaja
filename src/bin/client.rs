@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::os::unix::net::UnixStream;
+use std::net::TcpStream;
 use std::{env, process};
 
 use skaja::Commands;
@@ -22,7 +22,7 @@ fn main() {
         }
     };
 
-    let mut stream = UnixStream::connect("mysocket").expect("Failed connecting to socket.");
+    let mut stream = TcpStream::connect("127.0.0.1:8080").expect("Failed connecting to socket.");
 
     let command_args = match command.arguments() {
         Some(args) => args,

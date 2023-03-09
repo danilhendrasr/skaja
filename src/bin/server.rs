@@ -1,47 +1,161 @@
-use std::os::unix::net::UnixListener;
+use std::collections::HashMap;
+use std::io::{self, Read, Write};
+use std::str;
 
-use polling::{Event, Poller};
+use mio::event::Event;
+use mio::net::{TcpListener, TcpStream};
+use mio::{Events, Interest, Poll, Registry, Token};
+
 use skaja::Stream;
 
+const SERVER: Token = Token(0);
+
 fn main() -> Result<(), ()> {
-    let socket_path = "mysocket";
-    let listener = UnixListener::bind(socket_path).expect("Could not create unix socket");
+    let mut poll = Poll::new().expect("Failed creating poll.");
+    let mut events = Events::with_capacity(128);
 
-    listener
-        .set_nonblocking(true)
-        .expect("Failed setting listener as non-blocking.");
+    let sock_addr = "127.0.0.1:8080".parse().expect("Invalid socket address");
+    let mut server = TcpListener::bind(sock_addr).expect("Could not create tcp socket");
 
-    let poller = Poller::new().expect("Failed creating new poll");
-    let _ = poller.add(&listener, Event::readable(7));
+    poll.registry()
+        .register(&mut server, SERVER, Interest::READABLE)
+        .expect("Failed registering to poll");
 
-    let mut events = Vec::new();
+    let mut connections = HashMap::new();
+    let mut unique_token = Token(SERVER.0 + 1);
+
     loop {
-        events.clear();
-        poller
-            .wait(&mut events, None)
-            .expect("Dunno man, it failed.");
+        poll.poll(&mut events, None).expect("Failed polling poll");
 
         for ev in &events {
-            if ev.key == 7 {
-                let (unix_stream, _) = listener.accept().expect("Failed accepting connection");
-                handle_stream(Stream::new(unix_stream))?;
-                let _ = poller.modify(&listener, Event::readable(7));
+            match ev.token() {
+                SERVER => loop {
+                    let (mut connection, address) = match server.accept() {
+                        Ok((connection, address)) => (connection, address),
+                        Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                            break;
+                        }
+                        Err(e) => {
+                            panic!("Error accepting connection: {}", e);
+                        }
+                    };
+
+                    println!("Accepted connection from: {}", address);
+                    let token = next(&mut unique_token);
+                    poll.registry()
+                        .register(
+                            &mut connection,
+                            token,
+                            Interest::READABLE.add(Interest::WRITABLE),
+                        )
+                        .expect("Failed registering connection to poll");
+
+                    connections.insert(token, connection);
+                },
+                token => {
+                    let done = if let Some(connection) = connections.get_mut(&token) {
+                        handle_connection_event(poll.registry(), connection, ev)
+                            .expect("Failed handling stream")
+                    } else {
+                        false
+                    };
+
+                    if done {
+                        if let Some(mut connection) = connections.remove(&token) {
+                            poll.registry()
+                                .deregister(&mut connection)
+                                .expect("Failed deregistering connection")
+                        }
+                    }
+                }
             }
         }
     }
 }
 
-fn handle_stream(mut stream: Stream) -> Result<(), ()> {
-    let nstr = stream.read_x_bytes(4);
-    let nstr = u32::from_ne_bytes(nstr.try_into().unwrap());
+const DATA: &[u8] = b"Hello world!";
 
-    for i in 0..nstr {
-        let str_len = u32::from_ne_bytes(stream.read_x_bytes(4).try_into().unwrap());
-        let str = stream.read_x_bytes(str_len as usize);
-        println!("Str {i} length: {str_len}");
-        println!("Str {i}: ",);
-        println!("{}", String::from_utf8_lossy(&str));
+/// Returns `true` if the connection is done.
+fn handle_connection_event(
+    registry: &Registry,
+    connection: &mut TcpStream,
+    event: &Event,
+) -> io::Result<bool> {
+    if event.is_writable() {
+        // We can (maybe) write to the connection.
+        match connection.write(DATA) {
+            // We want to write the entire `DATA` buffer in a single go. If we
+            // write less we'll return a short write error (same as
+            // `io::Write::write_all` does).
+            Ok(n) if n < DATA.len() => return Err(io::ErrorKind::WriteZero.into()),
+            Ok(_) => {
+                // After we've written something we'll reregister the connection
+                // to only respond to readable events.
+                registry.reregister(connection, event.token(), Interest::READABLE)?
+            }
+            Err(ref err) if would_block(err) => {}
+            Err(ref err) if interrupted(err) => {
+                return handle_connection_event(registry, connection, event)
+            }
+            Err(err) => return Err(err),
+        }
     }
 
-    Ok(())
+    if event.is_readable() {
+        let mut connection_closed = false;
+        let mut received_data = vec![0; 4096];
+        let mut bytes_read = 0;
+        // We can (maybe) read from the connection.
+        loop {
+            match connection.read(&mut received_data[bytes_read..]) {
+                Ok(0) => {
+                    // Reading 0 bytes means the other side has closed the
+                    // connection or is done writing, then so are we.
+                    connection_closed = true;
+                    break;
+                }
+                Ok(n) => {
+                    bytes_read += n;
+                    if bytes_read == received_data.len() {
+                        received_data.resize(received_data.len() + 1024, 0);
+                    }
+                }
+                // Would block "errors" are the OS's way of saying that the
+                // connection is not actually ready to perform this I/O operation.
+                Err(ref err) if would_block(err) => break,
+                Err(ref err) if interrupted(err) => continue,
+                // Other errors we'll consider fatal.
+                Err(err) => return Err(err),
+            }
+        }
+
+        if bytes_read != 0 {
+            let received_data = &received_data[..bytes_read];
+            if let Ok(str_buf) = str::from_utf8(received_data) {
+                println!("Received data: {}", str_buf.trim_end());
+            } else {
+                println!("Received (none UTF-8) data: {:?}", received_data);
+            }
+        }
+
+        if connection_closed {
+            println!("Connection closed");
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+fn next(current: &mut Token) -> Token {
+    let next = current.0 + 1;
+    Token(next)
+}
+
+fn would_block(err: &io::Error) -> bool {
+    err.kind() == io::ErrorKind::WouldBlock
+}
+
+fn interrupted(err: &io::Error) -> bool {
+    err.kind() == io::ErrorKind::Interrupted
 }
