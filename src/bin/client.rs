@@ -32,7 +32,8 @@ fn main() {
         }
     };
 
-    let nstr: u32 = command_args.len() as u32;
+    // First 4 bytes are the number of strings in the payload (the header).
+    let nstr: u32 = 1 + command_args.len() as u32;
     let mut payload = nstr.to_ne_bytes().to_vec();
 
     let command_str = command.as_str();
@@ -42,7 +43,7 @@ fn main() {
 
     println!("command args: {:?}", command_args);
     for value in command_args {
-        let value_len_in_4b = value.len();
+        let value_len_in_4b = value.len() as u32;
         payload.append(&mut value_len_in_4b.to_ne_bytes().to_vec());
         payload.append(&mut value.as_bytes().to_vec());
     }

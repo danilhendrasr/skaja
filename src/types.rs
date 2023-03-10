@@ -1,4 +1,7 @@
-use std::{io::Read, os::unix::net::UnixStream};
+use std::{
+    io::{Error, Read},
+    os::unix::net::UnixStream,
+};
 
 pub enum Commands {
     Get(Option<String>),
@@ -55,19 +58,46 @@ impl TryFrom<String> for Commands {
     }
 }
 
-pub struct Stream(UnixStream);
+pub struct Buff {
+    buffer: Vec<u8>,
+    last_index: usize,
+}
 
-impl Stream {
-    pub fn new(stream: UnixStream) -> Self {
-        Self(stream)
+impl Buff {
+    pub fn new(mut stream: UnixStream) -> Result<Self, Error> {
+        let mut buf = Vec::new();
+        stream.read_to_end(&mut buf)?;
+
+        Ok(Buff {
+            buffer: buf,
+            // Start from 4 because the first 4 bytes are the header
+            last_index: 4,
+        })
     }
 
-    pub fn read_x_bytes(&mut self, x: usize) -> Vec<u8> {
-        let mut buffer = vec![0u8; x];
-        self.0
-            .read_exact(&mut buffer)
-            .expect("Failed reading from stream.");
-        return buffer;
+    pub fn header(&mut self) -> u32 {
+        let mut header = [0u8; 4];
+        header.copy_from_slice(&self.buffer[0..4]);
+        println!("buffer: {:?}", self.buffer);
+        u32::from_ne_bytes(header)
+    }
+
+    fn next_msg_len(&mut self) -> u32 {
+        let mut msg_len = [0u8; 4];
+        msg_len.copy_from_slice(&self.buffer[self.last_index..self.last_index + 4]);
+        self.last_index += 4;
+        u32::from_ne_bytes(msg_len)
+    }
+
+    pub fn next_msg(&mut self) -> String {
+        let msg_len = self.next_msg_len();
+
+        let mut msg = vec![0u8; msg_len as usize];
+        msg.copy_from_slice(&self.buffer[self.last_index..self.last_index + msg_len as usize]);
+        self.last_index += msg_len as usize;
+        let msg = String::from_utf8_lossy(&msg);
+        println!("msg: {}", msg);
+        return msg.to_string();
     }
 }
 
