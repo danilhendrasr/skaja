@@ -105,21 +105,19 @@ fn handle_connection_event(
         let mut connection_closed = false;
         let mut received_data = vec![0; 4096];
         let mut bytes_read = 0;
-        // We can (maybe) read from the connection.
+
         loop {
-            match connection.read(&mut received_data[bytes_read..]) {
+            // Header is 4 bytes long (32 bits)
+            let mut header = vec![0; 4];
+            let mut buf = vec![0; 4096 + 4];
+            match connection.read_to_end(&mut buf) {
                 Ok(0) => {
                     // Reading 0 bytes means the other side has closed the
                     // connection or is done writing, then so are we.
                     connection_closed = true;
                     break;
                 }
-                Ok(n) => {
-                    bytes_read += n;
-                    if bytes_read == received_data.len() {
-                        received_data.resize(received_data.len() + 1024, 0);
-                    }
-                }
+                Ok(_) => {}
                 // Would block "errors" are the OS's way of saying that the
                 // connection is not actually ready to perform this I/O operation.
                 Err(ref err) if would_block(err) => break,
@@ -127,21 +125,96 @@ fn handle_connection_event(
                 // Other errors we'll consider fatal.
                 Err(err) => return Err(err),
             }
+            // match connection.read_exact(&mut header) {
+            //     Ok(_) => {}
+            //     // Would block "errors" are the OS's way of saying that the
+            //     // connection is not actually ready to perform this I/O operation.
+            //     Err(ref err) if would_block(err) => break,
+            //     Err(ref err) if interrupted(err) => continue,
+            //     // Other errors we'll consider fatal.
+            //     Err(err) => return Err(err),
+            // }
+
+            println!("Buf: {:?}", buf);
+            let nstr = u32::from_ne_bytes(buf[0..4].try_into().unwrap());
+            println!("Header: {:?}", nstr);
+
+            // let mut buf = String::new();
+            // connection
+            //     .read_to_string(&mut buf)
+            //     .expect("Failed reading payload");
+            // println!("Buf: {:?}", buf);
+
+            // for i in 0..nstr {
+            //     let mut str_len = vec![0; 4];
+            //     match connection.read_exact(&mut str_len) {
+            //         Ok(_) => {}
+            //         // Would block "errors" are the OS's way of saying that the
+            //         // connection is not actually ready to perform this I/O operation.
+            //         Err(ref err) if would_block(err) => break,
+            //         Err(ref err) if interrupted(err) => continue,
+            //         // Other errors we'll consider fatal.
+            //         Err(err) => return Err(err),
+            //     }
+            //     connection
+            //         .read_exact(&mut str_len)
+            //         .expect("Failed reading payload");
+            //     let str_len = u32::from_ne_bytes(str_len.try_into().unwrap());
+
+            //     let mut str = vec![0; str_len as usize];
+            //     match connection.read_exact(&mut str) {
+            //         Ok(_) => {}
+            //         // Would block "errors" are the OS's way of saying that the
+            //         // connection is not actually ready to perform this I/O operation.
+            //         Err(ref err) if would_block(err) => break,
+            //         Err(ref err) if interrupted(err) => continue,
+            //         // Other errors we'll consider fatal.
+            //         Err(err) => return Err(err),
+            //     }
+            //     let str = String::from_utf8_lossy(&str);
+
+            //     println!("Str {i} length: {str_len}");
+            //     println!("{}", str);
+            // }
         }
 
-        if bytes_read != 0 {
-            let received_data = &received_data[..bytes_read];
-            if let Ok(str_buf) = str::from_utf8(received_data) {
-                println!("Received data: {}", str_buf.trim_end());
-            } else {
-                println!("Received (none UTF-8) data: {:?}", received_data);
-            }
-        }
+        // We can (maybe) read from the connection.
+        // loop {
+        //     match connection.read(&mut received_data[bytes_read..]) {
+        //         Ok(0) => {
+        //             // Reading 0 bytes means the other side has closed the
+        //             // connection or is done writing, then so are we.
+        //             connection_closed = true;
+        //             break;
+        //         }
+        //         Ok(n) => {
+        //             bytes_read += n;
+        //             if bytes_read == received_data.len() {
+        //                 received_data.resize(received_data.len() + 1024, 0);
+        //             }
+        //         }
+        //         // Would block "errors" are the OS's way of saying that the
+        //         // connection is not actually ready to perform this I/O operation.
+        //         Err(ref err) if would_block(err) => break,
+        //         Err(ref err) if interrupted(err) => continue,
+        //         // Other errors we'll consider fatal.
+        //         Err(err) => return Err(err),
+        //     }
+        // }
 
-        if connection_closed {
-            println!("Connection closed");
-            return Ok(true);
-        }
+        // if bytes_read != 0 {
+        //     let received_data = &received_data[..bytes_read];
+        //     if let Ok(str_buf) = str::from_utf8(received_data) {
+        //         println!("Received data: {}", str_buf.trim_end());
+        //     } else {
+        //         println!("Received (none UTF-8) data: {:?}", received_data);
+        //     }
+        // }
+
+        // if connection_closed {
+        //     println!("Connection closed");
+        //     return Ok(true);
+        // }
     }
 
     Ok(false)

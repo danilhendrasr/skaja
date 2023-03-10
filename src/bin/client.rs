@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::{env, process};
 
@@ -22,8 +22,6 @@ fn main() {
         }
     };
 
-    let mut stream = TcpStream::connect("127.0.0.1:8080").expect("Failed connecting to socket.");
-
     let command_args = match command.arguments() {
         Some(args) => args,
         None => {
@@ -32,7 +30,10 @@ fn main() {
         }
     };
 
-    let nstr: u32 = command_args.len() as u32;
+    let mut connection =
+        TcpStream::connect("127.0.0.1:8080").expect("Failed connecting to socket.");
+
+    let nstr: u32 = command_args.len() as u32 + 1;
     let mut payload = nstr.to_ne_bytes().to_vec();
 
     let command_str = command.as_str();
@@ -47,5 +48,21 @@ fn main() {
         payload.append(&mut value.as_bytes().to_vec());
     }
 
-    stream.write(&payload).expect("Failed writing to stream.");
+    loop {
+        connection
+            .write(&payload)
+            .expect("Failed writing to stream.");
+
+        let mut buf = String::new();
+        match connection.read_to_string(&mut buf) {
+            Ok(_) => {
+                println!("Response: {}", buf);
+                break;
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                break;
+            }
+        }
+    }
 }
