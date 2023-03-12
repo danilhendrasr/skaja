@@ -1,59 +1,66 @@
 use std::{
+    env::Args,
     io::{Error, Read},
     os::unix::net::UnixStream,
 };
 
-pub enum Commands {
-    Get(Option<String>),
-    Set(Option<(String, String)>),
-    Delete(Option<String>),
+pub enum Command {
+    Get(String),
+    Set(String, String),
+    Delete(String),
 }
 
-impl Commands {
+impl Command {
+    pub fn parse(value: Args) -> Result<Self, String> {
+        let mut args = value.skip(1);
+        let command = match args.next() {
+            Some(command) => command,
+            None => return Err("No command provided".to_string()),
+        };
+
+        let command = match command.as_str() {
+            "get" => {
+                let arg = match args.next() {
+                    Some(value) => value,
+                    None => return Err("Command get needs 1 argument".to_string()),
+                };
+
+                Command::Get(arg)
+            }
+            "set" => {
+                if args.len() < 2 {
+                    return Err("Command set needs 2 arguments".to_string());
+                }
+
+                Command::Set(args.next().unwrap(), args.next().unwrap())
+            }
+            "del" => {
+                let arg = match args.next() {
+                    Some(value) => value,
+                    None => return Err("Command get needs 1 argument".to_string()),
+                };
+
+                Command::Delete(arg)
+            }
+            _ => return Err("Invalid command".to_string()),
+        };
+
+        Ok(command)
+    }
+
     pub fn as_str(&self) -> &str {
         match self {
-            Commands::Set(_) => "set",
-            Commands::Get(_) => "get",
-            Commands::Delete(_) => "del",
+            Command::Get(_) => "get",
+            Command::Set(_, _) => "set",
+            Command::Delete(_) => "del",
         }
     }
 
-    pub fn arguments(&self) -> Option<Vec<&str>> {
+    pub fn arguments(&self) -> Vec<&str> {
         match self {
-            Commands::Set(val) => {
-                if let Some((key, value)) = val {
-                    return Some(vec![key, value]);
-                }
-
-                return None;
-            }
-            Commands::Get(key) => {
-                if let Some(key) = key {
-                    return Some(vec![key]);
-                }
-
-                return None;
-            }
-            Commands::Delete(key) => {
-                if let Some(key) = key {
-                    return Some(vec![key]);
-                }
-
-                return None;
-            }
-        }
-    }
-}
-
-impl TryFrom<String> for Commands {
-    type Error = String;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        match value.as_str() {
-            "get" => Ok(Self::Get(None)),
-            "set" => Ok(Self::Set(None)),
-            "del" => Ok(Self::Delete(None)),
-            _ => Err("Invalid command".to_string()),
+            Command::Set(key, val) => vec![key, val],
+            Command::Get(key) => vec![key],
+            Command::Delete(key) => vec![key],
         }
     }
 }
@@ -105,4 +112,29 @@ pub enum StatusCodes {
     Ok,
     Err,
     NX,
+}
+
+pub struct ClientPayload(pub Vec<u8>);
+
+impl From<Command> for ClientPayload {
+    fn from(command: Command) -> Self {
+        let command_str = command.as_str();
+        let command_len_in_4b = command_str.len() as u32;
+        let command_args = command.arguments();
+
+        // Command + the number of arguments for the command
+        let nstr: u32 = 1 + command_args.len() as u32;
+
+        let mut payload = nstr.to_ne_bytes().to_vec();
+        payload.append(&mut command_len_in_4b.to_ne_bytes().to_vec());
+        payload.append(&mut command_str.as_bytes().to_vec());
+
+        for value in command_args {
+            let value_len_in_4b = value.len() as u32;
+            payload.append(&mut value_len_in_4b.to_ne_bytes().to_vec());
+            payload.append(&mut value.as_bytes().to_vec());
+        }
+
+        ClientPayload(payload)
+    }
 }
