@@ -11,7 +11,27 @@ pub enum Command {
 }
 
 impl Command {
-    pub fn parse(value: Args) -> Result<Self, String> {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Command::Get(_) => "get",
+            Command::Set(_, _) => "set",
+            Command::Delete(_) => "del",
+        }
+    }
+
+    pub fn arguments(&self) -> Vec<&str> {
+        match self {
+            Command::Set(key, val) => vec![key, val],
+            Command::Get(key) => vec![key],
+            Command::Delete(key) => vec![key],
+        }
+    }
+}
+
+impl TryFrom<Args> for Command {
+    type Error = String;
+
+    fn try_from(value: Args) -> Result<Self, Self::Error> {
         let mut args = value.skip(1);
         let command = match args.next() {
             Some(command) => command,
@@ -47,24 +67,9 @@ impl Command {
 
         Ok(command)
     }
-
-    pub fn as_str(&self) -> &str {
-        match self {
-            Command::Get(_) => "get",
-            Command::Set(_, _) => "set",
-            Command::Delete(_) => "del",
-        }
-    }
-
-    pub fn arguments(&self) -> Vec<&str> {
-        match self {
-            Command::Set(key, val) => vec![key, val],
-            Command::Get(key) => vec![key],
-            Command::Delete(key) => vec![key],
-        }
-    }
 }
 
+/// Buffer to be used for processing [`ClientPayload`].
 pub struct Buff {
     buffer: Vec<u8>,
     last_index: usize,
@@ -82,6 +87,7 @@ impl Buff {
         })
     }
 
+    /// Get the header of the payload.
     pub fn header(&mut self) -> u32 {
         let mut header = [0u8; 4];
         header.copy_from_slice(&self.buffer[0..4]);
@@ -89,6 +95,7 @@ impl Buff {
         u32::from_ne_bytes(header)
     }
 
+    /// Get the length of the next message in the payload.
     fn next_msg_len(&mut self) -> u32 {
         let mut msg_len = [0u8; 4];
         msg_len.copy_from_slice(&self.buffer[self.last_index..self.last_index + 4]);
@@ -96,6 +103,7 @@ impl Buff {
         u32::from_ne_bytes(msg_len)
     }
 
+    /// Get the next message in the payload.
     pub fn next_msg(&mut self) -> String {
         let msg_len = self.next_msg_len();
 
@@ -114,7 +122,21 @@ pub enum StatusCodes {
     NX,
 }
 
-pub struct ClientPayload(pub Vec<u8>);
+/// Contains an array of bytes, which is the payload that is sent to the server.
+/// The array of bytes' structure is described in the following table, the header
+/// represents the position of bytes in the array.
+///
+/// | 1st | 2nd | 3rd | 4th | 5th | ... | n-th | n+1-th |
+/// |---------|---------|---------|---------|---------|---------|---------|---------|
+/// | nstr | len | str1 | len | str2 | ... | len | strn |
+pub struct ClientPayload(Vec<u8>);
+
+impl ClientPayload {
+    /// Get the array of bytes that is the payload.
+    pub fn payload(&self) -> &[u8] {
+        &self.0
+    }
+}
 
 impl From<Command> for ClientPayload {
     fn from(command: Command) -> Self {
