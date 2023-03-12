@@ -111,7 +111,6 @@ impl Buff {
         msg.copy_from_slice(&self.buffer[self.last_index..self.last_index + msg_len as usize]);
         self.last_index += msg_len as usize;
         let msg = String::from_utf8_lossy(&msg);
-        println!("msg: {}", msg);
         return msg.to_string();
     }
 }
@@ -129,12 +128,57 @@ pub enum StatusCodes {
 /// | 1st | 2nd | 3rd | 4th | 5th | ... | n-th | n+1-th |
 /// |---------|---------|---------|---------|---------|---------|---------|---------|
 /// | nstr | len | str1 | len | str2 | ... | len | strn |
-pub struct ClientPayload(Vec<u8>);
+pub struct ClientPayload {
+    buffer: Vec<u8>,
+    last_index: usize,
+}
 
 impl ClientPayload {
     /// Get the array of bytes that is the payload.
     pub fn payload(&self) -> &[u8] {
-        &self.0
+        &self.buffer
+    }
+
+    /// Get the header of the payload.
+    pub fn header(&mut self) -> u32 {
+        let mut header = [0u8; 4];
+        header.copy_from_slice(&self.buffer[0..4]);
+        println!("buffer: {:?}", self.buffer);
+        u32::from_ne_bytes(header)
+    }
+
+    /// Get the length of the next message in the payload.
+    fn next_msg_len(&mut self) -> u32 {
+        let mut msg_len = [0u8; 4];
+        msg_len.copy_from_slice(&self.buffer[self.last_index..self.last_index + 4]);
+        self.last_index += 4;
+        u32::from_ne_bytes(msg_len)
+    }
+
+    /// Get the next message in the payload.
+    pub fn next_msg(&mut self) -> String {
+        let msg_len = self.next_msg_len();
+
+        let mut msg = vec![0u8; msg_len as usize];
+        msg.copy_from_slice(&self.buffer[self.last_index..self.last_index + msg_len as usize]);
+        self.last_index += msg_len as usize;
+        let msg = String::from_utf8_lossy(&msg);
+        return msg.to_string();
+    }
+}
+
+impl TryFrom<UnixStream> for ClientPayload {
+    type Error = Error;
+
+    fn try_from(mut stream: UnixStream) -> Result<Self, Self::Error> {
+        let mut buf = Vec::new();
+        stream.read_to_end(&mut buf)?;
+
+        Ok(ClientPayload {
+            buffer: buf,
+            // Start from 4th byte because the first 4 bytes are the header
+            last_index: 4,
+        })
     }
 }
 
@@ -157,6 +201,9 @@ impl From<Command> for ClientPayload {
             payload.append(&mut value.as_bytes().to_vec());
         }
 
-        ClientPayload(payload)
+        ClientPayload {
+            buffer: payload,
+            last_index: 4,
+        }
     }
 }

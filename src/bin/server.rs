@@ -1,7 +1,7 @@
 use std::os::unix::net::UnixListener;
 
 use polling::{Event, Poller};
-use skaja::Buff;
+use skaja::ClientPayload;
 
 fn main() -> Result<(), ()> {
     let socket_path = "mysocket";
@@ -26,7 +26,7 @@ fn main() -> Result<(), ()> {
                 let (unix_stream, _) = socket.accept().expect("Failed accepting connection");
                 _ = poller.modify(&socket, Event::readable(7));
 
-                let buffer = match Buff::new(unix_stream) {
+                let buffer = match ClientPayload::try_from(unix_stream) {
                     Ok(buffer) => buffer,
                     Err(_) => {
                         println!("Failed creating buffer, skipping connection.");
@@ -40,7 +40,7 @@ fn main() -> Result<(), ()> {
     }
 }
 
-fn handle_connection(mut buffer: Buff) -> Result<(), ()> {
+fn handle_connection(mut buffer: ClientPayload) -> Result<(), ()> {
     for _ in 0..buffer.header() {
         let str = buffer.next_msg();
         println!("{}", str);
