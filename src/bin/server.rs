@@ -1,7 +1,7 @@
 use std::os::unix::net::UnixListener;
 
 use polling::{Event, Poller};
-use skaja::ClientPayload;
+use skaja::{ClientPayload, Command};
 
 fn main() -> Result<(), ()> {
     let socket_path = "mysocket";
@@ -34,17 +34,19 @@ fn main() -> Result<(), ()> {
                     }
                 };
 
-                handle_connection(buffer)?;
+                match handle_connection(buffer) {
+                    Err(msg) => println!("Failed handling connection. {}", msg),
+                    _ => println!("Succeeded handling connection."),
+                }
             }
         }
     }
 }
 
-fn handle_connection(mut buffer: ClientPayload) -> Result<(), ()> {
-    for _ in 0..buffer.header() {
-        let str = buffer.next_msg();
-        println!("{}", str);
-    }
+fn handle_connection(buffer: ClientPayload) -> Result<(), String> {
+    let command =
+        Command::try_from(buffer).map_err(|err_msg| format!("Invalid payload: {}", err_msg))?;
+    println!("{:?}", command);
 
     Ok(())
 }

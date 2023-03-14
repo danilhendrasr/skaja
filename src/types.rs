@@ -4,6 +4,7 @@ use std::{
     os::unix::net::UnixStream,
 };
 
+#[derive(Debug)]
 pub enum Command {
     Get(String),
     Set(String, String),
@@ -69,49 +70,52 @@ impl TryFrom<Args> for Command {
     }
 }
 
-/// Buffer to be used for processing [`ClientPayload`].
-pub struct Buff {
-    buffer: Vec<u8>,
-    last_index: usize,
-}
+impl TryFrom<ClientPayload> for Command {
+    type Error = String;
 
-impl Buff {
-    pub fn new(mut stream: UnixStream) -> Result<Self, Error> {
-        let mut buf = Vec::new();
-        stream.read_to_end(&mut buf)?;
+    fn try_from(mut client_payload: ClientPayload) -> Result<Self, Self::Error> {
+        // Implements [`TryFrom`] trait instead of [`From`] because the payload might be invalid.
+        // Even though it's unlikely that the client binary will send invalid payload
+        // given it already has enough validations to ensure the payload is valid.
+        // You can't be too safe by adding server-side payload validation.
 
-        Ok(Buff {
-            buffer: buf,
-            // Start from 4 because the first 4 bytes are the header
-            last_index: 4,
-        })
-    }
+        let next_msg = match client_payload.next_msg() {
+            Some(next_msg) => next_msg,
+            None => return Err("Payload doesn't contain any command.".to_string()),
+        };
 
-    /// Get the header of the payload.
-    pub fn header(&mut self) -> u32 {
-        let mut header = [0u8; 4];
-        header.copy_from_slice(&self.buffer[0..4]);
-        println!("buffer: {:?}", self.buffer);
-        u32::from_ne_bytes(header)
-    }
+        match next_msg.as_str() {
+            "get" => {
+                let arg = match client_payload.next_msg() {
+                    Some(arg) => arg,
+                    None => return Err("Missing argument for command \"get\".".to_string()),
+                };
 
-    /// Get the length of the next message in the payload.
-    fn next_msg_len(&mut self) -> u32 {
-        let mut msg_len = [0u8; 4];
-        msg_len.copy_from_slice(&self.buffer[self.last_index..self.last_index + 4]);
-        self.last_index += 4;
-        u32::from_ne_bytes(msg_len)
-    }
+                return Ok(Self::Get(arg));
+            }
+            "set" => {
+                let key = match client_payload.next_msg() {
+                    Some(key) => key,
+                    None => return Err("Missing key argument for command \"set\".".to_string()),
+                };
 
-    /// Get the next message in the payload.
-    pub fn next_msg(&mut self) -> String {
-        let msg_len = self.next_msg_len();
+                let value = match client_payload.next_msg() {
+                    Some(val) => val,
+                    None => return Err("Missing value argument for command \"set\".".to_string()),
+                };
 
-        let mut msg = vec![0u8; msg_len as usize];
-        msg.copy_from_slice(&self.buffer[self.last_index..self.last_index + msg_len as usize]);
-        self.last_index += msg_len as usize;
-        let msg = String::from_utf8_lossy(&msg);
-        return msg.to_string();
+                return Ok(Self::Set(key, value));
+            }
+            "del" => {
+                let arg = match client_payload.next_msg() {
+                    Some(arg) => arg,
+                    None => return Err("Missing argument for command \"del\".".to_string()),
+                };
+
+                return Ok(Self::Delete(arg));
+            }
+            _ => return Err("Invalid command.".to_string()),
+        }
     }
 }
 
@@ -125,9 +129,9 @@ pub enum StatusCodes {
 /// The array of bytes' structure is described in the following table, the header
 /// represents the position of bytes in the array.
 ///
-/// | 1st | 2nd | 3rd | 4th | 5th | ... | n-th | n+1-th |
+/// | 1st     | 2nd     | 3rd     | 4th     | 5th     | ...     | n-th    | n+1-th  |
 /// |---------|---------|---------|---------|---------|---------|---------|---------|
-/// | nstr | len | str1 | len | str2 | ... | len | strn |
+/// | nstr    | len     | str1    | len     | str2    | ...     | len     | strn    |
 pub struct ClientPayload {
     buffer: Vec<u8>,
     last_index: usize,
@@ -143,27 +147,45 @@ impl ClientPayload {
     pub fn header(&mut self) -> u32 {
         let mut header = [0u8; 4];
         header.copy_from_slice(&self.buffer[0..4]);
-        println!("buffer: {:?}", self.buffer);
         u32::from_ne_bytes(header)
     }
 
     /// Get the length of the next message in the payload.
-    fn next_msg_len(&mut self) -> u32 {
-        let mut msg_len = [0u8; 4];
-        msg_len.copy_from_slice(&self.buffer[self.last_index..self.last_index + 4]);
-        self.last_index += 4;
-        u32::from_ne_bytes(msg_len)
+    /// Returns None if there is no next message.
+    fn next_msg_len(&mut self) -> Option<u32> {
+        // The message metadata is a 32bit integer.
+        const BYTES_TO_READ: usize = 4;
+        let buffer_len = self.payload().len();
+
+        if self.last_index + 4 > buffer_len {
+            return None;
+        }
+
+        let mut msg_len = [0u8; BYTES_TO_READ];
+        msg_len.copy_from_slice(&self.buffer[self.last_index..self.last_index + BYTES_TO_READ]);
+        self.last_index += BYTES_TO_READ;
+
+        Some(u32::from_ne_bytes(msg_len))
     }
 
     /// Get the next message in the payload.
-    pub fn next_msg(&mut self) -> String {
-        let msg_len = self.next_msg_len();
+    /// Returns None if there is none.
+    pub fn next_msg(&mut self) -> Option<String> {
+        let next_msg_len: usize = match self.next_msg_len() {
+            Some(value) => value as usize,
+            None => return None,
+        };
 
-        let mut msg = vec![0u8; msg_len as usize];
-        msg.copy_from_slice(&self.buffer[self.last_index..self.last_index + msg_len as usize]);
-        self.last_index += msg_len as usize;
+        let buffer_len = self.payload().len();
+        if self.last_index + next_msg_len > buffer_len {
+            return None;
+        }
+
+        let mut msg = vec![0u8; next_msg_len];
+        msg.copy_from_slice(&self.buffer[self.last_index..self.last_index + next_msg_len]);
+        self.last_index += next_msg_len as usize;
         let msg = String::from_utf8_lossy(&msg);
-        return msg.to_string();
+        return Some(msg.to_string());
     }
 }
 
