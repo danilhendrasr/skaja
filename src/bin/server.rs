@@ -1,11 +1,12 @@
-use std::os::unix::net::UnixListener;
+use std::net::{TcpListener, TcpStream};
 
 use polling::{Event, Poller};
 use skaja::{ClientPayload, Command};
 
 fn main() -> Result<(), ()> {
-    let socket_path = "mysocket";
-    let socket = UnixListener::bind(socket_path).expect("Could not create unix socket");
+    let socket_addr = "127.0.0.1:3000";
+    let socket =
+        TcpListener::bind(socket_addr).expect(&format!("Could not bind server to {}", socket_addr));
 
     socket
         .set_nonblocking(true)
@@ -23,19 +24,11 @@ fn main() -> Result<(), ()> {
 
         for ev in &events {
             if ev.key == 7 {
-                let (unix_stream, _) = socket.accept().expect("Failed accepting connection");
+                let (stream, _) = socket.accept().expect("Failed accepting connection");
                 _ = poller.modify(&socket, Event::readable(7));
 
-                let buffer = match ClientPayload::try_from(unix_stream) {
-                    Ok(buffer) => buffer,
-                    Err(_) => {
-                        println!("Failed creating buffer, skipping connection.");
-                        break;
-                    }
-                };
-
-                match handle_connection(buffer) {
-                    Err(msg) => println!("Failed handling connection. {}", msg),
+                match handle_connection(stream) {
+                    Err(msg) => eprintln!("Failed handling connection: {}", msg),
                     _ => println!("Succeeded handling connection."),
                 }
             }
@@ -43,7 +36,15 @@ fn main() -> Result<(), ()> {
     }
 }
 
-fn handle_connection(buffer: ClientPayload) -> Result<(), String> {
+fn handle_connection(stream: TcpStream) -> Result<(), String> {
+    // Create a buffer from the stream
+    let buffer = match ClientPayload::try_from(stream) {
+        Ok(buffer) => buffer,
+        Err(_) => {
+            return Err("failed creating buffer, skipping connection.".to_string());
+        }
+    };
+
     let command =
         Command::try_from(buffer).map_err(|err_msg| format!("Invalid payload: {}", err_msg))?;
     println!("{:?}", command);

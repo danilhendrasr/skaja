@@ -1,7 +1,7 @@
 use std::{
     env::Args,
     io::{Error, Read},
-    os::unix::net::UnixStream,
+    net::TcpStream,
 };
 
 #[derive(Debug)]
@@ -189,10 +189,10 @@ impl ClientPayload {
     }
 }
 
-impl TryFrom<UnixStream> for ClientPayload {
+impl TryFrom<TcpStream> for ClientPayload {
     type Error = Error;
 
-    fn try_from(mut stream: UnixStream) -> Result<Self, Self::Error> {
+    fn try_from(mut stream: TcpStream) -> Result<Self, Self::Error> {
         let mut buf = Vec::new();
         stream.read_to_end(&mut buf)?;
 
