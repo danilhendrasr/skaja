@@ -43,14 +43,14 @@ impl TryFrom<Args> for Command {
             "get" => {
                 let arg = match args.next() {
                     Some(value) => value,
-                    None => return Err("Command get needs 1 argument".to_string()),
+                    None => return Err("'get' command needs 1 argument".to_string()),
                 };
 
                 Command::Get(arg)
             }
             "set" => {
                 if args.len() < 2 {
-                    return Err("Command set needs 2 arguments".to_string());
+                    return Err("'set' command needs 2 arguments".to_string());
                 }
 
                 Command::Set(args.next().unwrap(), args.next().unwrap())
@@ -58,7 +58,7 @@ impl TryFrom<Args> for Command {
             "del" => {
                 let arg = match args.next() {
                     Some(value) => value,
-                    None => return Err("Command get needs 1 argument".to_string()),
+                    None => return Err("'del' command needs 1 argument".to_string()),
                 };
 
                 Command::Delete(arg)

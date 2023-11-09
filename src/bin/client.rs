@@ -1,20 +1,15 @@
-use std::io::Write;
-use std::{env, net::TcpStream};
+use std::env;
 
-use skaja::{ClientPayload, Command};
+use skaja::{Client, Command};
 
 fn main() -> Result<(), String> {
+    let mut client = Client::new("localhost:3000")?;
     let command = Command::try_from(env::args())?;
 
-    let mut stream =
-        TcpStream::connect("localhost:3000").map_err(|_| "Failed connecting to socket.")?;
-
-    // Construct full payload from command and its arguments.
-    let client_payload = ClientPayload::from(command);
-
-    stream
-        .write(&client_payload.payload())
-        .map_err(|_| "Failed writing to socket.")?;
+    match client.send(command) {
+        Ok(_) => println!("Succeeded sending command."),
+        Err(msg) => eprintln!("Failed sending command: {}", msg),
+    }
 
     Ok(())
 }
