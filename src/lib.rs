@@ -21,10 +21,10 @@ impl Client {
     }
 
     pub fn send(&mut self, command: Command) -> Result<(), String> {
-        let client_payload = ClientPayload::from(command);
+        let request: Request = command.into();
 
         self.stream
-            .write(&client_payload.payload())
+            .write(request.payload())
             .map_err(|_| "Failed writing to stream.")?;
 
         Ok(())
@@ -72,15 +72,17 @@ impl Server {
 
     fn handle_connection(&self, stream: TcpStream) -> Result<(), String> {
         // Create a buffer from the stream
-        let buffer = match ClientPayload::try_from(stream) {
+        let request = match Request::try_from(stream) {
             Ok(buffer) => buffer,
             Err(_) => {
                 return Err("failed creating buffer, skipping connection.".to_string());
             }
         };
 
-        let command =
-            Command::try_from(buffer).map_err(|err_msg| format!("Invalid payload: {}", err_msg))?;
+        let command: Command = request
+            .try_into()
+            .map_err(|err_msg| format!("Invalid payload: {}", err_msg))?;
+
         println!("{:?}", command);
 
         Ok(())
