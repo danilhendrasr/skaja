@@ -36,7 +36,7 @@ impl StreamExtension for TcpStream {
 
         if !connection_closed {
             return Err(Error::new(
-                ErrorKind::Other,
+                ErrorKind::WouldBlock,
                 "Connection not ready to be read from.",
             ));
         }

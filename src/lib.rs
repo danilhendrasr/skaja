@@ -51,12 +51,16 @@ impl Client {
 
 pub struct Server {
     listener: TcpListener,
+    store: HashMap<String, String>,
 }
 
 impl Server {
     pub fn new(address: SocketAddr) -> Result<Self, io::Error> {
         let stream = TcpListener::bind(address)?;
-        Ok(Self { listener: stream })
+        Ok(Self {
+            listener: stream,
+            store: HashMap::new(),
+        })
     }
 
     pub fn listen(&mut self) -> Result<(), io::Error> {
@@ -111,7 +115,11 @@ impl Server {
                     }
                     token => {
                         if let Some(connection) = connections.get_mut(&token) {
-                            self.handle_connection(connection, event).unwrap();
+                            match self.handle_connection(connection, event) {
+                                Err(e) if e.kind() == io::ErrorKind::WouldBlock => break,
+                                Err(e) => return Err(e),
+                                Ok(_) => {}
+                            }
                         };
                     }
                 }
@@ -120,7 +128,7 @@ impl Server {
     }
 
     fn handle_connection(
-        &self,
+        &mut self,
         connection: &mut TcpStream,
         event: &Event,
     ) -> Result<bool, io::Error> {
@@ -135,7 +143,20 @@ impl Server {
                 }
             };
 
-            println!("{:?}", command);
+            match command {
+                Command::Get(key) => match self.store.get(&key) {
+                    Some(value) => println!("Value: {}", value),
+                    None => println!("Key {key} not found."),
+                },
+                Command::Set(key, value) => {
+                    self.store.insert(key, value);
+                }
+                Command::Delete(key) => {
+                    if let None = self.store.remove(&key) {
+                        println!("Key {key} not found.");
+                    }
+                }
+            }
         }
 
         Ok(true)
