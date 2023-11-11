@@ -1,5 +1,6 @@
 # Skaja
-The name comes from translating Redis' name expansion --which is Remote Dictionary Server--
-into Indonesian, which becomes "Server Kamus Jarak Jauh", or "Skaja" for short.
 
-Ikr, I'm bad at naming things.
+The name comes from translating what "Redis" stands for --Remote Dictionary Server--
+into Indonesian, which becomes "Server Kamus Jarak Jauh" or Skaja for short.
+
+Ikr, what a goofy ahh name.
