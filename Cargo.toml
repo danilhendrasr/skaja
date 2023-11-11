@@ -8,4 +8,4 @@ name = "skaja"
 path = "src/lib.rs"
 
 [dependencies]
-polling = "2.5.2"
+mio = { version = "0.8.9", features = ["os-poll", "net"] }

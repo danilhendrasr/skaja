@@ -1,13 +1,17 @@
-mod constants;
 mod types;
-pub mod utils;
 
 use std::{
-    io::Write,
-    net::{TcpListener, TcpStream},
+    collections::HashMap,
+    io::{self, Write},
+    net::SocketAddr,
+    time::Duration,
 };
 
-use polling::{Event, Poller};
+use mio::{
+    event::Event,
+    net::{TcpListener, TcpStream},
+    Events, Interest, Poll, Token,
+};
 pub use types::*;
 
 pub struct Client {
@@ -15,19 +19,33 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(address: &str) -> Result<Self, String> {
+    pub fn connect(address: SocketAddr) -> Result<Self, String> {
         let stream = TcpStream::connect(address).map_err(|_| "Failed connecting to server.")?;
         Ok(Self { stream })
     }
 
-    pub fn send(&mut self, command: Command) -> Result<(), String> {
-        let request: Request = command.into();
+    pub fn send(&mut self, command: Command) -> Result<(), io::Error> {
+        const CLIENT_TOKEN: Token = Token(0);
 
-        self.stream
-            .write(request.payload())
-            .map_err(|_| "Failed writing to stream.")?;
+        let mut poll = Poll::new()?;
+        let mut events = Events::with_capacity(1);
 
-        Ok(())
+        poll.registry()
+            .register(&mut self.stream, CLIENT_TOKEN, Interest::WRITABLE)?;
+
+        loop {
+            poll.poll(&mut events, Some(Duration::new(30, 0)))?;
+
+            for event in events.iter() {
+                if event.token() != CLIENT_TOKEN || !event.is_writable() {
+                    continue;
+                }
+
+                let request: Request = command.into();
+                self.stream.write(request.payload())?;
+                return Ok(());
+            }
+        }
     }
 }
 
@@ -36,55 +54,90 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(address: &str) -> Result<Self, String> {
-        let stream = TcpListener::bind(address).map_err(|_| "Failed connecting to server.")?;
+    pub fn new(address: SocketAddr) -> Result<Self, io::Error> {
+        let stream = TcpListener::bind(address)?;
         Ok(Self { listener: stream })
     }
 
-    pub fn listen(&self) {
-        self.listener
-            .set_nonblocking(true)
-            .expect("Failed setting listener as non-blocking.");
+    pub fn listen(&mut self) -> Result<(), io::Error> {
+        const SERVER_TOKEN: Token = Token(0);
 
-        let poller = Poller::new().expect("Failed creating new poll");
-        let _ = poller.add(&self.listener, Event::readable(7));
+        let mut poller = Poll::new()?;
+        let mut connections: HashMap<Token, TcpStream> = HashMap::new();
 
-        let mut events = Vec::new();
+        poller
+            .registry()
+            .register(&mut self.listener, SERVER_TOKEN, Interest::READABLE)?;
+
+        // Unique token for each connection
+        let unique_token = Token(SERVER_TOKEN.0 + 1);
+
+        let mut events = Events::with_capacity(1024);
+
         loop {
-            events.clear();
-            poller
-                .wait(&mut events, None)
-                .expect("Dunno man, it failed.");
+            if let Err(e) = poller.poll(&mut events, None) {
+                if e.kind() == io::ErrorKind::Interrupted {
+                    continue;
+                }
 
-            for ev in &events {
-                if ev.key == 7 {
-                    let (stream, _) = self.listener.accept().expect("Failed accepting connection");
-                    _ = poller.modify(&self.listener, Event::readable(7));
+                return Err(e);
+            }
 
-                    match self.handle_connection(stream) {
-                        Err(msg) => eprintln!("Failed handling connection: {}", msg),
-                        _ => println!("Succeeded handling connection."),
+            for event in events.iter() {
+                match event.token() {
+                    SERVER_TOKEN => {
+                        let (mut connection, address) = match self.listener.accept() {
+                            Ok((connection, addr)) => (connection, addr),
+                            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                                // If we get a `WouldBlock` error we know our
+                                // listener has no more incoming connections queued,
+                                // so we can return to polling and wait for some
+                                // more.
+                                break;
+                            }
+                            Err(e) => return Err(e),
+                        };
+
+                        println!("Accepted connection from: {}", address);
+
+                        let connection_token = Token(unique_token.0 + connections.len());
+                        poller.registry().register(
+                            &mut connection,
+                            connection_token,
+                            Interest::READABLE.add(Interest::WRITABLE),
+                        )?;
+
+                        connections.insert(connection_token, connection);
+                    }
+                    token => {
+                        if let Some(connection) = connections.get_mut(&token) {
+                            self.handle_connection(connection, event).unwrap();
+                        };
                     }
                 }
             }
         }
     }
 
-    fn handle_connection(&self, stream: TcpStream) -> Result<(), String> {
-        // Create a buffer from the stream
-        let request = match Request::try_from(stream) {
-            Ok(buffer) => buffer,
-            Err(_) => {
-                return Err("failed creating buffer, skipping connection.".to_string());
-            }
-        };
+    fn handle_connection(
+        &self,
+        connection: &mut TcpStream,
+        event: &Event,
+    ) -> Result<bool, io::Error> {
+        if event.is_readable() {
+            let request = connection.to_request()?;
 
-        let command: Command = request
-            .try_into()
-            .map_err(|err_msg| format!("Invalid payload: {}", err_msg))?;
+            let command: Command = match request.try_into() {
+                Ok(command) => command,
+                Err(err_msg) => {
+                    println!("Invalid payload: {}", err_msg);
+                    return Ok(true);
+                }
+            };
 
-        println!("{:?}", command);
+            println!("{:?}", command);
+        }
 
-        Ok(())
+        Ok(true)
     }
 }

@@ -1,8 +1,52 @@
 use std::{
     env::Args,
-    io::{Error, Read},
-    net::TcpStream,
+    io::{self, Error, ErrorKind, Read},
 };
+
+use mio::net::TcpStream;
+
+pub trait StreamExtension {
+    fn to_request(&mut self) -> Result<Request, io::Error>;
+}
+
+impl StreamExtension for TcpStream {
+    fn to_request(&mut self) -> Result<Request, io::Error> {
+        let mut connection_closed = false;
+        let mut received_data = Vec::new();
+
+        // We can (maybe) read from the connection.
+        loop {
+            match self.read_to_end(&mut received_data) {
+                Ok(0) => {
+                    // Reading 0 bytes means the other side has closed the
+                    // connection or is done writing, then so are we.
+                    connection_closed = true;
+                    break;
+                }
+                Ok(_) => continue,
+
+                // Would block "errors" are the OS's way of saying that the
+                // connection is not actually ready to perform this I/O operation.
+                Err(ref err) if err.kind() == ErrorKind::WouldBlock => break,
+                Err(ref err) if err.kind() == ErrorKind::Interrupted => continue,
+                // Other errors we'll consider fatal.
+                Err(err) => return Err(err),
+            }
+        }
+
+        if !connection_closed {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "Connection not ready to be read from.",
+            ));
+        }
+
+        Ok(Request {
+            payload: received_data,
+            pointer_pos: 4,
+        })
+    }
+}
 
 #[derive(Debug)]
 pub enum Command {
@@ -95,7 +139,7 @@ impl Into<Request> for Command {
 
         Request {
             payload,
-            last_index: 4,
+            pointer_pos: 4,
         }
     }
 }
@@ -115,7 +159,10 @@ pub struct Request {
     /// |---------|---------|---------|---------|---------|---------|---------|---------|
     /// | nstr    | len     | str1    | len     | str2    | ...     | len     | strn    |
     payload: Vec<u8>,
-    last_index: usize,
+
+    /// The position of the pointer in the payload.
+    /// This is used to parse the payload into a [`Command`] struct.
+    pointer_pos: usize,
 }
 
 impl Request {
@@ -138,13 +185,13 @@ impl Request {
         const BYTES_TO_READ: usize = 4;
         let buffer_len = self.payload().len();
 
-        if self.last_index + 4 > buffer_len {
+        if self.pointer_pos + 4 > buffer_len {
             return None;
         }
 
         let mut msg_len = [0u8; BYTES_TO_READ];
-        msg_len.copy_from_slice(&self.payload[self.last_index..self.last_index + BYTES_TO_READ]);
-        self.last_index += BYTES_TO_READ;
+        msg_len.copy_from_slice(&self.payload[self.pointer_pos..self.pointer_pos + BYTES_TO_READ]);
+        self.pointer_pos += BYTES_TO_READ;
 
         Some(u32::from_ne_bytes(msg_len))
     }
@@ -158,30 +205,15 @@ impl Request {
         };
 
         let buffer_len = self.payload().len();
-        if self.last_index + next_msg_len > buffer_len {
+        if self.pointer_pos + next_msg_len > buffer_len {
             return None;
         }
 
         let mut msg = vec![0u8; next_msg_len];
-        msg.copy_from_slice(&self.payload[self.last_index..self.last_index + next_msg_len]);
-        self.last_index += next_msg_len as usize;
+        msg.copy_from_slice(&self.payload[self.pointer_pos..self.pointer_pos + next_msg_len]);
+        self.pointer_pos += next_msg_len as usize;
         let msg = String::from_utf8_lossy(&msg);
         return Some(msg.to_string());
-    }
-}
-
-impl TryFrom<TcpStream> for Request {
-    type Error = Error;
-
-    fn try_from(mut stream: TcpStream) -> Result<Self, Self::Error> {
-        let mut buf = Vec::new();
-        stream.read_to_end(&mut buf)?;
-
-        Ok(Request {
-            payload: buf,
-            // Start from 4th byte because the first 4 bytes are the header
-            last_index: 4,
-        })
     }
 }
 
