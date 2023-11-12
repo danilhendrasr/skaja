@@ -6,6 +6,8 @@ use std::{
 use mio::net::TcpStream;
 
 pub trait StreamExtension {
+    /// Converts the stream into a [`Request`] struct without taking ownership of the stream,
+    /// which is different from [`Into<Request>`] trait which takes ownership of the param.
     fn to_request(&mut self) -> Result<Request, io::Error>;
 }
 
@@ -43,6 +45,8 @@ impl StreamExtension for TcpStream {
 
         Ok(Request {
             payload: received_data,
+            // Points to the first byte of the payload.
+            // The first 4 bytes are the header, so we skip them.
             pointer_pos: 4,
         })
     }
