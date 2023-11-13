@@ -26,7 +26,6 @@ impl Client {
 
     pub fn send(&mut self, command: Command) -> Result<(), io::Error> {
         const CLIENT_TOKEN: Token = Token(0);
-        let request: Request = command.into();
 
         let mut poll = Poll::new()?;
         let mut events = Events::with_capacity(1);
@@ -42,9 +41,9 @@ impl Client {
                     continue;
                 }
 
+                let request: Request = command.into();
                 self.stream.write(request.payload())?;
-                poll.registry()
-                    .reregister(&mut self.stream, CLIENT_TOKEN, Interest::WRITABLE)?;
+                return Ok(());
             }
         }
     }
