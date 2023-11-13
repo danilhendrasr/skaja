@@ -115,13 +115,21 @@ impl Server {
                         connections.insert(connection_token, connection);
                     }
                     token => {
-                        if let Some(connection) = connections.get_mut(&token) {
+                        let done = if let Some(connection) = connections.get_mut(&token) {
                             match self.handle_connection(connection, event) {
                                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => break,
                                 Err(e) => return Err(e),
-                                Ok(_) => {}
+                                Ok(result) => result,
                             }
+                        } else {
+                            false
                         };
+
+                        if done {
+                            if let Some(mut conn) = connections.remove(&token) {
+                                poller.registry().deregister(&mut conn)?;
+                            }
+                        }
                     }
                 }
             }
@@ -134,7 +142,7 @@ impl Server {
         event: &Event,
     ) -> Result<bool, io::Error> {
         if event.is_readable() {
-            let request = connection.to_request()?;
+            let request = connection.as_request()?;
 
             let command: Command = match request.try_into() {
                 Ok(command) => command,
@@ -158,8 +166,10 @@ impl Server {
                     }
                 }
             }
+
+            return Ok(true);
         }
 
-        Ok(true)
+        Ok(false)
     }
 }
