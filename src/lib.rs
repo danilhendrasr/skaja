@@ -26,6 +26,7 @@ impl Client {
 
     pub fn send(&mut self, command: Command) -> Result<(), io::Error> {
         const CLIENT_TOKEN: Token = Token(0);
+        let request: Request = command.into();
 
         let mut poll = Poll::new()?;
         let mut events = Events::with_capacity(1);
@@ -41,9 +42,9 @@ impl Client {
                     continue;
                 }
 
-                let request: Request = command.into();
                 self.stream.write(request.payload())?;
-                return Ok(());
+                poll.registry()
+                    .reregister(&mut self.stream, CLIENT_TOKEN, Interest::READABLE)?;
             }
         }
     }
@@ -126,6 +127,7 @@ impl Server {
 
                         if done {
                             if let Some(mut conn) = connections.remove(&token) {
+                                println!("Closing connection: {:?}", conn.peer_addr());
                                 poller.registry().deregister(&mut conn)?;
                             }
                         }
@@ -151,12 +153,15 @@ impl Server {
                 }
             };
 
+            println!("Received command: {:?}", command);
+
             match command {
                 Command::Get(key) => match self.store.get(&key) {
                     Some(value) => println!("Value: {}", value),
                     None => println!("Key {key} not found."),
                 },
                 Command::Set(key, value) => {
+                    println!("Key \"{key}\" set to \"{value}\".");
                     self.store.insert(key, value);
                 }
                 Command::Delete(key) => {
