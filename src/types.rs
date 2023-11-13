@@ -5,14 +5,14 @@ use std::{
 
 use mio::net::TcpStream;
 
-pub trait StreamExtension {
+pub trait AsRequest {
     /// Converts the stream into a [`Request`] struct without taking ownership of the stream,
     /// which is different from [`Into<Request>`] trait which takes ownership of the param.
-    fn to_request(&mut self) -> Result<Request, io::Error>;
+    fn as_request(&mut self) -> Result<Request, io::Error>;
 }
 
-impl StreamExtension for TcpStream {
-    fn to_request(&mut self) -> Result<Request, io::Error> {
+impl AsRequest for TcpStream {
+    fn as_request(&mut self) -> Result<Request, io::Error> {
         let mut connection_closed = false;
         let mut received_data = Vec::new();
 
