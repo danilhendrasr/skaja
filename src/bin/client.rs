@@ -7,7 +7,7 @@ fn main() -> Result<(), String> {
     let command = Command::try_from(env::args())?;
 
     match client.send(command) {
-        Ok(_) => println!("Succeeded sending command."),
+        Ok(_) => {}
         Err(msg) => eprintln!("Failed sending command: {}", msg),
     }
 
