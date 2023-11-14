@@ -36,10 +36,26 @@ dependencies = [
 ]
 
 [[package]]
-name = "skaja"
+name = "skaja_client"
 version = "0.1.0"
 dependencies = [
  "mio",
+ "skaja_lib",
+]
+
+[[package]]
+name = "skaja_lib"
+version = "0.1.0"
+dependencies = [
+ "mio",
+]
+
+[[package]]
+name = "skaja_server"
+version = "0.1.0"
+dependencies = [
+ "mio",
+ "skaja_lib",
 ]
 
 [[package]]

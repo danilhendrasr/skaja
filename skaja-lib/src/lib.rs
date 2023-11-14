@@ -1,9 +1,13 @@
+mod constants;
+
 use std::{
     env::Args,
     io::{self, Error, ErrorKind, Read},
 };
 
 use mio::net::TcpStream;
+
+pub use constants::*;
 
 pub trait AsRequest {
     /// Converts the stream into a [`Request`] struct without taking ownership of the stream,

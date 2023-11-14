@@ -1,6 +1,9 @@
+mod client;
+
 use std::env;
 
-use skaja::{Client, Command};
+use client::Client;
+use skaja_lib::Command;
 
 fn main() -> Result<(), String> {
     let mut client = Client::connect("127.0.0.1:3000".parse().unwrap())?;

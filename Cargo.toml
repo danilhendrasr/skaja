@@ -1,11 +1,3 @@
-[package]
-name = "skaja"
-version = "0.1.0"
-edition = "2021"
-
-[lib]
-name = "skaja"
-path = "src/lib.rs"
-
-[dependencies]
-mio = { version = "0.8.9", features = ["os-poll", "net"] }
+[workspace]
+members = ["skaja-client", "skaja-server", "skaja-lib"]
+resolver = "2"
