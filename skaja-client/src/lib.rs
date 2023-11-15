@@ -1,3 +1,4 @@
+use core::panic;
 use std::{
     io::{self, Write},
     net::SocketAddr,
@@ -12,9 +13,14 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn connect(address: SocketAddr) -> Result<Self, String> {
-        let stream = TcpStream::connect(address).map_err(|_| "Failed connecting to server.")?;
-        Ok(Self { connection: stream })
+    /// Connect to the given address. Panics if the connection fails.
+    pub fn connect(address: SocketAddr) -> Self {
+        let stream = match TcpStream::connect(address) {
+            Ok(stream) => stream,
+            Err(msg) => panic!("Failed connecting to server: {}", msg),
+        };
+
+        Self { connection: stream }
     }
 
     pub fn send(&mut self, mut command: Command) -> Result<(), io::Error> {

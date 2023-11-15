@@ -1,12 +1,10 @@
-mod client;
-
 use std::env;
 
-use client::Client;
+pub use skaja_client::Client;
 use skaja_lib::Command;
 
 fn main() -> Result<(), String> {
-    let mut client = Client::connect("127.0.0.1:3000".parse().unwrap())?;
+    let mut client = Client::connect("127.0.0.1:3000".parse().unwrap());
     let command = Command::try_from(env::args())?;
 
     match client.send(command) {

@@ -20,20 +20,23 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(address: SocketAddr) -> Result<Self, io::Error> {
-        let mut listener_binding = TcpListener::bind(address)?;
-        let poller = Poll::new()?;
+    /// Create a new server instance bound to the given address.
+    /// Panics if the binding fails.
+    pub fn new(address: SocketAddr) -> Self {
+        let mut listener_binding = TcpListener::bind(address).unwrap();
+        let poller = Poll::new().unwrap();
 
         poller
             .registry()
-            .register(&mut listener_binding, SERVER_TOKEN, Interest::READABLE)?;
+            .register(&mut listener_binding, SERVER_TOKEN, Interest::READABLE)
+            .unwrap();
 
-        Ok(Self {
+        Self {
             listener: listener_binding,
             data_store: HashMap::new(),
             poller,
             connections_store: HashMap::new(),
-        })
+        }
     }
 
     pub fn listen(&mut self) -> Result<(), io::Error> {

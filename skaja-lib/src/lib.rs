@@ -171,6 +171,52 @@ impl Command {
     }
 }
 
+impl TryFrom<String> for Command {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let splitted_string = value.split(' ').collect::<Vec<&str>>();
+
+        if splitted_string.len() < 1 {
+            return Err("No command provided".to_string());
+        }
+
+        let command = splitted_string[0];
+        let command = match command {
+            "get" => {
+                let key = if splitted_string.len() < 2 {
+                    return Err("\"get\" command needs 1 argument".to_string());
+                } else {
+                    splitted_string[1]
+                };
+
+                Command::Get(key.to_owned())
+            }
+            "set" => {
+                let (key, value) = if splitted_string.len() < 3 {
+                    return Err("\"set\" command needs 2 arguments".to_string());
+                } else {
+                    (splitted_string[1], splitted_string[2])
+                };
+
+                Command::Set(key.to_owned(), value.to_owned())
+            }
+            "del" => {
+                let key = if splitted_string.len() < 2 {
+                    return Err("\"del\" command needs 1 argument".to_string());
+                } else {
+                    splitted_string[1]
+                };
+
+                Command::Delete(key.to_owned())
+            }
+            _ => return Err("Invalid command".to_string()),
+        };
+
+        Ok(command)
+    }
+}
+
 impl TryFrom<Args> for Command {
     type Error = String;
 
