@@ -33,8 +33,9 @@ impl Command {
 impl TryFrom<String> for Command {
     type Error = String;
 
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        let splitted_string = value.split(' ').collect::<Vec<&str>>();
+    fn try_from(string_command: String) -> Result<Self, Self::Error> {
+        let string_command = string_command.to_lowercase();
+        let splitted_string = string_command.split(' ').collect::<Vec<&str>>();
 
         if splitted_string.is_empty() {
             return Err("No command provided".to_string());
@@ -89,6 +90,18 @@ mod command_from_string {
         assert_eq!(command, Command::Set("key".to_owned(), "value".to_owned()));
 
         let command = Command::try_from("del key".to_string()).unwrap();
+        assert_eq!(command, Command::Delete("key".to_owned()));
+    }
+
+    #[test]
+    pub fn valid_string_but_in_uppercase_should_parses_to_command_in_lowercase() {
+        let command = Command::try_from("GET KEY".to_string()).unwrap();
+        assert_eq!(command, Command::Get("key".to_owned()));
+
+        let command = Command::try_from("SET key Value".to_string()).unwrap();
+        assert_eq!(command, Command::Set("key".to_owned(), "value".to_owned()));
+
+        let command = Command::try_from("DEL key".to_string()).unwrap();
         assert_eq!(command, Command::Delete("key".to_owned()));
     }
 
