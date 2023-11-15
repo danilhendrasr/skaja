@@ -36,7 +36,7 @@ impl TryFrom<String> for Command {
     fn try_from(value: String) -> Result<Self, Self::Error> {
         let splitted_string = value.split(' ').collect::<Vec<&str>>();
 
-        if splitted_string.len() < 1 {
+        if splitted_string.is_empty() {
             return Err("No command provided".to_string());
         }
 

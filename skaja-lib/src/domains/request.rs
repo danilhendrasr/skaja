@@ -103,6 +103,12 @@ impl Request {
     }
 }
 
+impl std::default::Default for Request {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TryInto<Command> for Request {
     type Error = String;
 
