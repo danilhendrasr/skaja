@@ -2,7 +2,8 @@ use std::{env::Args, io};
 
 use super::{ReadToRequest, Request};
 
-#[derive(Debug)]
+/// The commands that can be sent to the server.
+#[derive(Debug, PartialEq)]
 pub enum Command {
     Get(String),
     Set(String, String),
@@ -10,6 +11,7 @@ pub enum Command {
 }
 
 impl Command {
+    /// Returns the command as a string.
     pub fn as_str(&self) -> &str {
         match self {
             Command::Get(_) => "get",
@@ -18,6 +20,7 @@ impl Command {
         }
     }
 
+    /// Returns the arguments for the command.
     pub fn arguments(&self) -> Vec<&str> {
         match self {
             Command::Set(key, val) => vec![key, val],
@@ -70,6 +73,59 @@ impl TryFrom<String> for Command {
         };
 
         Ok(command)
+    }
+}
+
+#[cfg(test)]
+mod command_from_string {
+    use crate::Command;
+
+    #[test]
+    pub fn valid_string_should_parses_to_command() {
+        let command = Command::try_from("get key".to_string()).unwrap();
+        assert_eq!(command, Command::Get("key".to_owned()));
+
+        let command = Command::try_from("set key value".to_string()).unwrap();
+        assert_eq!(command, Command::Set("key".to_owned(), "value".to_owned()));
+
+        let command = Command::try_from("del key".to_string()).unwrap();
+        assert_eq!(command, Command::Delete("key".to_owned()));
+    }
+
+    #[test]
+    #[should_panic]
+    pub fn invalid_string_should_result_in_err() {
+        Command::try_from("invalid command".to_string()).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    pub fn get_command_without_key_should_result_in_err() {
+        Command::try_from("get".to_string()).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    pub fn set_command_without_key_should_result_in_err() {
+        Command::try_from("set".to_string()).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    pub fn set_command_without_value_should_result_in_err() {
+        Command::try_from("set key".to_string()).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    pub fn del_command_without_key_should_result_in_err() {
+        Command::try_from("del".to_string()).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    pub fn empty_string_should_result_in_err() {
+        Command::try_from("".to_string()).unwrap();
     }
 }
 
