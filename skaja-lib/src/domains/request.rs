@@ -157,3 +157,53 @@ impl TryInto<Command> for Request {
         }
     }
 }
+
+#[cfg(test)]
+mod request_to_command {
+    use super::Request;
+    use crate::domains::command::Command;
+
+    #[test]
+    pub fn valid_get_payload_should_deserialized_correctly() {
+        // Payload for "get testing" command
+        let payload = vec![
+            2, 0, 0, 0, 3, 0, 0, 0, 103, 101, 116, 7, 0, 0, 0, 116, 101, 115, 116, 105, 110, 103,
+        ];
+        let request = Request::new_with_payload(payload);
+        let command: Command = request.try_into().unwrap();
+        assert_eq!(command, Command::Get("testing".to_string()));
+    }
+
+    #[test]
+    pub fn valid_set_payload_should_deserialized_correctly() {
+        // Payload for "set key value" command
+        let payload = vec![
+            3, 0, 0, 0, 3, 0, 0, 0, 115, 101, 116, 3, 0, 0, 0, 107, 101, 121, 5, 0, 0, 0, 118, 97,
+            108, 117, 101,
+        ];
+        let request = Request::new_with_payload(payload);
+        let command: Command = request.try_into().unwrap();
+        assert_eq!(
+            command,
+            Command::Set("key".to_string(), "value".to_string())
+        );
+    }
+
+    #[test]
+    pub fn valid_del_payload_should_deserialized_correctly() {
+        // Payload for "del testing" command
+        let payload = vec![
+            2, 0, 0, 0, 3, 0, 0, 0, 100, 101, 108, 7, 0, 0, 0, 116, 101, 115, 116, 105, 110, 103,
+        ];
+        let request = Request::new_with_payload(payload);
+        let command: Command = request.try_into().unwrap();
+        assert_eq!(command, Command::Delete("testing".to_string()));
+    }
+
+    #[test]
+    #[should_panic]
+    pub fn invalid_payload_should_result_in_error() {
+        let request = Request::new_with_payload(vec![0, 0, 0, 0]);
+        let _: Command = request.try_into().unwrap();
+    }
+}
