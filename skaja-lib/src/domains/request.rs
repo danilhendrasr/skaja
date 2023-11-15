@@ -7,6 +7,7 @@ pub trait ReadToRequest {
     fn read_to_request(&mut self) -> Result<Request, io::Error>;
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Request {
     /// Contains an array of bytes, which is the payload that is sent to the server.
     /// The array of bytes' structure is described in the following table:

@@ -196,3 +196,61 @@ impl ReadToRequest for Command {
         Ok(Request::new_with_payload(payload))
     }
 }
+
+#[cfg(test)]
+mod command_to_request {
+    use crate::{Command, ReadToRequest, Request};
+
+    #[test]
+    pub fn get_command_should_be_properly_converted_to_request() {
+        let mut command = Command::Get("key".to_owned());
+        let request = command.read_to_request().unwrap();
+
+        let mut expected_payload: Vec<u8> = Vec::new();
+        expected_payload.append(&mut 2_u32.to_ne_bytes().into());
+        expected_payload.append(&mut 3_u32.to_ne_bytes().into());
+        expected_payload.append(&mut "get".into());
+        expected_payload.append(&mut 3_u32.to_ne_bytes().into());
+        expected_payload.append(&mut "key".into());
+
+        let expected_request = Request::new_with_payload(expected_payload);
+
+        assert_eq!(request, expected_request);
+    }
+
+    #[test]
+    pub fn set_command_should_be_properly_converted_to_request() {
+        let mut command = Command::Set("key".to_owned(), "value".to_owned());
+        let request = command.read_to_request().unwrap();
+
+        let mut expected_payload: Vec<u8> = Vec::new();
+        expected_payload.append(&mut 3_u32.to_ne_bytes().into());
+        expected_payload.append(&mut 3_u32.to_ne_bytes().into());
+        expected_payload.append(&mut "set".into());
+        expected_payload.append(&mut 3_u32.to_ne_bytes().into());
+        expected_payload.append(&mut "key".into());
+        expected_payload.append(&mut 5_u32.to_ne_bytes().into());
+        expected_payload.append(&mut "value".into());
+
+        let expected_request = Request::new_with_payload(expected_payload);
+
+        assert_eq!(request, expected_request);
+    }
+
+    #[test]
+    pub fn del_command_should_be_properly_converted_to_request() {
+        let mut command = Command::Delete("key".to_owned());
+        let request = command.read_to_request().unwrap();
+
+        let mut expected_payload: Vec<u8> = Vec::new();
+        expected_payload.append(&mut 2_u32.to_ne_bytes().into());
+        expected_payload.append(&mut 3_u32.to_ne_bytes().into());
+        expected_payload.append(&mut "del".into());
+        expected_payload.append(&mut 3_u32.to_ne_bytes().into());
+        expected_payload.append(&mut "key".into());
+
+        let expected_request = Request::new_with_payload(expected_payload);
+
+        assert_eq!(request, expected_request);
+    }
+}
