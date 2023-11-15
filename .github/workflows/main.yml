@@ -23,7 +23,25 @@ jobs:
         run: |
           cargo clippy
 
+  test:
+    needs: clippy
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+
+      - name: Run tests
+        run: |
+          cargo test
+
   build:
+    needs: [clippy, test]
     runs-on: ubuntu-latest
 
     steps:
