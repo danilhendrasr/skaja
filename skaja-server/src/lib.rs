@@ -10,7 +10,7 @@ use mio::{
     Events, Interest, Poll, Token,
 };
 
-use skaja_lib::{AsRequest, Command, RawResponse, StatusCodes, SERVER_TOKEN};
+use skaja_lib::{Command, RawResponse, ReadToRequest, StatusCodes, SERVER_TOKEN};
 
 pub struct Server {
     listener: TcpListener,
@@ -145,7 +145,7 @@ impl Server {
         }
 
         if event.is_readable() {
-            let request = connection.as_request()?;
+            let request = connection.read_to_request()?;
 
             let command: Command = match request.try_into() {
                 Ok(command) => command,

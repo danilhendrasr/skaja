@@ -6,7 +6,7 @@ use std::{
 };
 
 use mio::{net::TcpStream, Events, Interest, Poll};
-use skaja_lib::{AsRequest, AsResponse, Command, Response, CLIENT_TOKEN};
+use skaja_lib::{Command, ReadToRequest, ReadToResponse, Response, CLIENT_TOKEN};
 
 pub struct Client {
     connection: TcpStream,
@@ -24,7 +24,7 @@ impl Client {
     }
 
     pub fn send(&mut self, mut command: Command) -> Result<(), io::Error> {
-        let request = command.as_request()?;
+        let request = command.read_to_request()?;
 
         let mut poller = Poll::new()?;
         let mut events = Events::with_capacity(1);
@@ -47,7 +47,7 @@ impl Client {
                 }
 
                 if event.is_readable() {
-                    let response: Response = self.connection.as_response()?.into();
+                    let response: Response = self.connection.read_to_response()?.into();
                     println!("Response:\n{}", response);
                     return Ok(());
                 }
