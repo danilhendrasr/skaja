@@ -38,6 +38,7 @@ jobs:
 
       - name: Run tests
         run: |
+          cargo build --verbose --bins --lib
           cargo test
 
   build:
@@ -53,6 +54,6 @@ jobs:
           profile: minimal
           toolchain: stable
 
-      - name: Build all targets
+      - name: Build release mode for all targets
         run: |
-          cargo build --verbose --bins --lib
+          cargo build --verbose --release --bins --lib
