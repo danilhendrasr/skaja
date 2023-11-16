@@ -23,7 +23,7 @@ impl Client {
         Self { connection: stream }
     }
 
-    pub fn send(&mut self, mut command: Command) -> Result<(), io::Error> {
+    pub fn send(&mut self, mut command: Command) -> Result<Response, io::Error> {
         let request = command.read_to_request()?;
 
         let mut poller = Poll::new()?;
@@ -48,8 +48,7 @@ impl Client {
 
                 if event.is_readable() {
                     let response: Response = self.connection.read_to_response()?.into();
-                    println!("Response:\n{}", response);
-                    return Ok(());
+                    return Ok(response);
                 }
             }
         }
