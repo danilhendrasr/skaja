@@ -5,7 +5,7 @@ pub trait ReadToResponse {
     fn read_to_response(&mut self) -> Result<RawResponse, io::Error>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum StatusCodes {
     Ok,
     ClientErr,
@@ -87,6 +87,23 @@ impl RawResponse {
 pub struct Response {
     status_code: StatusCodes,
     message: String,
+}
+
+impl Response {
+    pub fn new(status_code: StatusCodes, msg: String) -> Self {
+        Response {
+            status_code,
+            message: msg,
+        }
+    }
+
+    pub fn status_code(&self) -> StatusCodes {
+        self.status_code
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
 }
 
 impl From<RawResponse> for Response {
