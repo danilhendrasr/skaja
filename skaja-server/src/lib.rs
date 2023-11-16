@@ -55,7 +55,7 @@ impl Server {
 
             for event in events_store.iter() {
                 match event.token() {
-                    Token(0) => {
+                    SERVER_TOKEN => {
                         let (mut connection, address) = match self.listener.accept() {
                             Ok((connection, addr)) => (connection, addr),
                             Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
