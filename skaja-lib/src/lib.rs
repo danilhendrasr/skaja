@@ -54,10 +54,7 @@ impl ReadToRequest for TcpStream {
                 Err(ref err) if err.kind() == ErrorKind::WouldBlock => break,
                 Err(ref err) if err.kind() == ErrorKind::Interrupted => continue,
                 // Other errors we'll consider fatal.
-                Err(err) => {
-                    eprintln!("Fatal error: {:?}", err);
-                    return Err(err);
-                }
+                Err(err) => return Err(err),
             }
         }
 
@@ -111,10 +108,7 @@ impl ReadToResponse for TcpStream {
                 Err(ref err) if err.kind() == ErrorKind::WouldBlock => break,
                 Err(ref err) if err.kind() == ErrorKind::Interrupted => continue,
                 // Other errors we'll consider fatal.
-                Err(err) => {
-                    eprintln!("Fatal error: {:?}", err);
-                    return Err(err);
-                }
+                Err(err) => return Err(err),
             }
         }
 

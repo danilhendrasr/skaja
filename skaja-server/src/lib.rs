@@ -13,6 +13,7 @@ use mio::{
 use skaja_lib::{Command, RawResponse, ReadToRequest, StatusCodes, SERVER_TOKEN};
 
 pub struct Server {
+    address: SocketAddr,
     listener: TcpListener,
     poller: Poll,
     data_store: HashMap<String, String>,
@@ -22,8 +23,26 @@ pub struct Server {
 impl Server {
     /// Create a new server instance bound to the given address.
     /// Panics if the binding fails.
-    pub fn new(address: SocketAddr) -> Self {
-        let mut listener_binding = TcpListener::bind(address).unwrap();
+    pub fn new(mut address: SocketAddr) -> Self {
+        const MAX_BIND_RETRY: u32 = 1000;
+        // How many times we tried to bind to another port.
+        let mut bind_retry_count = 1;
+
+        let mut listener_binding = loop {
+            match TcpListener::bind(address) {
+                Ok(listener) => break listener,
+                Err(err) if err.kind() == io::ErrorKind::AddrInUse => {
+                    address.set_port(address.port() + 1);
+                }
+                Err(err) => panic!("Failed starting server: {}", err),
+            }
+
+            bind_retry_count += 1;
+            if bind_retry_count > MAX_BIND_RETRY {
+                panic!("Failed finding open ports to bind the server to.");
+            }
+        };
+
         let poller = Poll::new().unwrap();
 
         poller
@@ -32,6 +51,7 @@ impl Server {
             .unwrap();
 
         Self {
+            address,
             listener: listener_binding,
             data_store: HashMap::new(),
             poller,
@@ -39,7 +59,13 @@ impl Server {
         }
     }
 
+    pub fn address(&self) -> SocketAddr {
+        self.address
+    }
+
+    /// Start the server and listen for incoming connections.
     pub fn listen(&mut self) -> Result<(), io::Error> {
+        println!("Server listening on: {}", self.address());
         let mut events_store = Events::with_capacity(1024);
         // Unique token for each connection
         let unique_token = Token(SERVER_TOKEN.0 + 1);
@@ -111,7 +137,6 @@ impl Server {
                 Command::Get(key) => match self.data_store.get(key) {
                     Some(value) => response = RawResponse::new(StatusCodes::Ok, value.to_string()),
                     None => {
-                        println!("Key \"{key}\" not found.");
                         response = RawResponse::new(
                             StatusCodes::ClientErr,
                             format!("Key \"{key}\" not found."),

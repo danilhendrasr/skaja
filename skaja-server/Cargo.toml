@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 skaja_lib = { path = "../skaja-lib" }
 mio = { version = "0.8.9", features = ["os-poll", "net"] }
+clap = { version = "4.4.8", features = ["derive"] }
