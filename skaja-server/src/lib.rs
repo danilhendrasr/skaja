@@ -109,8 +109,18 @@ impl Server {
                     token => {
                         let done = match self.handle_connection_event(event) {
                             Err(e) if e.kind() == io::ErrorKind::WouldBlock => break,
+
+                            Ok(_) => false,
+                            Err(e) if e.kind() == io::ErrorKind::Interrupted => false,
+
+                            // Connection is done only if we get the following errors.
+                            // I don't know if this is the best way to handle this. But it works.
+                            Err(e) if e.kind() == io::ErrorKind::ConnectionReset => true,
+                            Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => true,
+                            Err(e) if e.kind() == io::ErrorKind::ConnectionAborted => true,
+                            Err(e) if e.kind() == io::ErrorKind::BrokenPipe => true,
+
                             Err(e) => return Err(e),
-                            Ok(result) => result,
                         };
 
                         if done {
@@ -125,7 +135,7 @@ impl Server {
         }
     }
 
-    fn handle_connection_event(&mut self, event: &Event) -> Result<bool, io::Error> {
+    fn handle_connection_event(&mut self, event: &Event) -> Result<(), io::Error> {
         let (connection, payload) = self
             .connections_store
             .get_mut(&event.token())
@@ -165,8 +175,11 @@ impl Server {
 
             let payload: Vec<u8> = response.into();
             connection.write_all(&payload)?;
+            self.poller
+                .registry()
+                .reregister(connection, event.token(), Interest::READABLE)?;
 
-            return Ok(true);
+            return Ok(());
         }
 
         if event.is_readable() {
@@ -176,7 +189,7 @@ impl Server {
                 Ok(command) => command,
                 Err(err_msg) => {
                     println!("Invalid payload: {}", err_msg);
-                    return Ok(true);
+                    return Ok(());
                 }
             };
 
@@ -191,6 +204,6 @@ impl Server {
                 });
         }
 
-        Ok(false)
+        Ok(())
     }
 }

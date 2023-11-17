@@ -10,36 +10,39 @@ use skaja_lib::{Command, ReadToRequest, ReadToResponse, Response, CLIENT_TOKEN};
 
 pub struct Client {
     connection: TcpStream,
+    poller: Poll,
 }
 
 impl Client {
     /// Connect to the given address. Panics if the connection fails.
     pub fn connect(address: SocketAddr) -> Self {
-        let stream = match TcpStream::connect(address) {
+        let mut connection = match TcpStream::connect(address) {
             Ok(stream) => stream,
             Err(msg) => panic!("Failed connecting to server: {}", msg),
         };
 
-        Self { connection: stream }
+        let poller = Poll::new().unwrap();
+
+        poller
+            .registry()
+            .register(&mut connection, CLIENT_TOKEN, Interest::WRITABLE)
+            .unwrap();
+
+        Self { connection, poller }
     }
 
     pub fn send(&mut self, mut command: Command) -> Result<Response, io::Error> {
         let request = command.read_to_request()?;
 
-        let mut poller = Poll::new()?;
         let mut events = Events::with_capacity(1);
 
-        poller
-            .registry()
-            .register(&mut self.connection, CLIENT_TOKEN, Interest::WRITABLE)?;
-
         loop {
-            poller.poll(&mut events, Some(Duration::new(30, 0)))?;
+            self.poller.poll(&mut events, Some(Duration::new(30, 0)))?;
 
             for event in events.iter() {
                 if event.is_writable() {
                     self.connection.write_all(request.payload())?;
-                    poller.registry().reregister(
+                    self.poller.registry().reregister(
                         &mut self.connection,
                         CLIENT_TOKEN,
                         Interest::READABLE,
@@ -48,6 +51,12 @@ impl Client {
 
                 if event.is_readable() {
                     let response: Response = self.connection.read_to_response()?.into();
+                    // self.poller.registry().deregister(&mut self.connection)?;
+                    self.poller.registry().reregister(
+                        &mut self.connection,
+                        CLIENT_TOKEN,
+                        Interest::WRITABLE,
+                    )?;
                     return Ok(response);
                 }
             }
