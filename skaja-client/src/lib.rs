@@ -51,12 +51,12 @@ impl Client {
 
                 if event.is_readable() {
                     let response: Response = self.connection.read_to_response()?.into();
-                    // self.poller.registry().deregister(&mut self.connection)?;
                     self.poller.registry().reregister(
                         &mut self.connection,
                         CLIENT_TOKEN,
                         Interest::WRITABLE,
                     )?;
+
                     return Ok(response);
                 }
             }

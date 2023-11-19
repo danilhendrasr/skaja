@@ -83,6 +83,12 @@ impl RawResponse {
     }
 }
 
+impl From<RawResponse> for Vec<u8> {
+    fn from(value: RawResponse) -> Self {
+        value.0
+    }
+}
+
 #[derive(Debug)]
 pub struct Response {
     status_code: StatusCodes,
@@ -128,8 +134,91 @@ impl std::fmt::Display for Response {
     }
 }
 
-impl From<RawResponse> for Vec<u8> {
-    fn from(value: RawResponse) -> Self {
-        value.0
+#[cfg(test)]
+mod raw_response {
+    use super::{RawResponse, StatusCodes};
+    use crate::Response;
+
+    #[test]
+    pub fn new_ok_should_result_in_correct_payload() {
+        let raw_response = RawResponse::new(StatusCodes::Ok, "OK".into());
+        let payload = raw_response.payload();
+
+        let header = &payload[0..4];
+        let msg_header = &payload[4..8];
+        let msg = &payload[8..];
+
+        assert_eq!(payload.len(), 10);
+        assert_eq!(header, [0, 0, 0, 0]);
+        assert_eq!(msg_header, [2, 0, 0, 0]);
+        assert_eq!(msg, [79, 75]);
+    }
+
+    #[test]
+    pub fn new_client_err_should_result_in_correct_payload() {
+        let raw_response =
+            RawResponse::new(StatusCodes::ClientErr, r#"Key "testing" not found."#.into());
+        let payload = raw_response.payload();
+
+        println!("{:?}", payload);
+        let header = &payload[0..4];
+        let msg_header = &payload[4..8];
+        let msg = &payload[8..];
+
+        assert_eq!(payload.len(), 32);
+        assert_eq!(header, [1, 0, 0, 0]);
+        assert_eq!(msg_header, [24, 0, 0, 0]);
+        assert_eq!(
+            msg,
+            [
+                75, 101, 121, 32, 34, 116, 101, 115, 116, 105, 110, 103, 34, 32, 110, 111, 116, 32,
+                102, 111, 117, 110, 100, 46
+            ]
+        );
+    }
+
+    #[test]
+    pub fn new_server_err_should_result_in_correct_payload() {
+        let raw_response = RawResponse::new(StatusCodes::ServerErr, r#"Server error"#.into());
+        let payload = raw_response.payload();
+
+        let header = &payload[0..4];
+        let msg_header = &payload[4..8];
+        let msg = &payload[8..];
+
+        assert_eq!(payload.len(), 20);
+        assert_eq!(header, [2, 0, 0, 0]);
+        assert_eq!(msg_header, [12, 0, 0, 0]);
+        assert_eq!(
+            msg,
+            [83, 101, 114, 118, 101, 114, 32, 101, 114, 114, 111, 114]
+        );
+    }
+
+    #[test]
+    pub fn ok_should_be_parsed_correctly_to_response() {
+        let raw_response = RawResponse::new(StatusCodes::Ok, "OK".into());
+        let response: Response = raw_response.into();
+
+        assert_eq!(response.status_code(), StatusCodes::Ok);
+        assert_eq!(response.message(), "OK");
+    }
+
+    #[test]
+    pub fn client_err_should_be_parsed_correctly_to_response() {
+        let raw_response = RawResponse::new(StatusCodes::ClientErr, "There's an error".into());
+        let response: Response = raw_response.into();
+
+        assert_eq!(response.status_code(), StatusCodes::ClientErr);
+        assert_eq!(response.message(), "There's an error");
+    }
+
+    #[test]
+    pub fn server_err_should_be_parsed_correctly_to_response() {
+        let raw_response = RawResponse::new(StatusCodes::ServerErr, "Server error".into());
+        let response: Response = raw_response.into();
+
+        assert_eq!(response.status_code(), StatusCodes::ServerErr);
+        assert_eq!(response.message(), "Server error");
     }
 }
