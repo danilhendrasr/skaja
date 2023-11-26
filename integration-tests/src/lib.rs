@@ -1,9 +1,5 @@
 pub mod test_utils {
-    use std::{
-        io::{BufRead, BufReader},
-        path::PathBuf,
-        process::Stdio,
-    };
+    use std::{net::TcpListener, panic, path::PathBuf};
 
     fn skaja_server_exe() -> PathBuf {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -24,28 +20,41 @@ pub mod test_utils {
         path
     }
 
-    pub fn launch_server_process() -> (std::process::Child, String) {
-        let mut server_address: String = "127.0.0.1:3000".to_string();
-        let mut process_handle = std::process::Command::new(skaja_server_exe())
+    fn get_available_port() -> Option<u16> {
+        (8000..9000).find(|port| port_is_available(*port))
+    }
+
+    fn port_is_available(port: u16) -> bool {
+        TcpListener::bind(("127.0.0.1", port)).is_ok()
+    }
+
+    pub fn launch_server_process(target_address: &str) -> std::process::Child {
+        let process_handle = std::process::Command::new(skaja_server_exe())
             .arg("--address")
-            .arg(&server_address)
-            .stdout(Stdio::piped())
+            .arg(target_address)
             .spawn()
             .unwrap();
 
-        let server_stdout = process_handle.stdout.as_mut().unwrap();
-        let stdout_buf = BufReader::new(server_stdout);
-        let mut lines = stdout_buf.lines();
-        while let Some(line) = lines.next() {
-            if let Ok(line) = line {
-                if line.contains("Server listening on") {
-                    let final_server_address = line.replace("Server listening on: ", "");
-                    server_address = final_server_address;
-                    break;
-                }
-            }
-        }
+        process_handle
+    }
 
-        (process_handle, server_address)
+    pub fn new_client(server_address: &str) -> skaja_client::Client {
+        skaja_client::Client::connect(server_address.parse().unwrap())
+    }
+
+    /// Launches a server process on a random port, runs the provided test function,
+    /// and then kills the server.
+    pub fn run_test<T>(test: T)
+    where
+        T: FnOnce(String) + panic::UnwindSafe,
+    {
+        let target_address = format!("127.0.0.1:{}", get_available_port().unwrap());
+        let mut server_handle = launch_server_process(&target_address);
+
+        let _ = panic::catch_unwind(|| {
+            test(target_address);
+        });
+
+        server_handle.kill().unwrap();
     }
 }

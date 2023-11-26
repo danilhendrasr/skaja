@@ -23,24 +23,13 @@ pub struct Server {
 impl Server {
     /// Create a new server instance bound to the given address.
     /// Panics if the binding fails.
-    pub fn new(mut address: SocketAddr) -> Self {
-        const MAX_BIND_RETRY: u32 = 1000;
-        // How many times we tried to bind to another port.
-        let mut bind_retry_count = 1;
-
-        let mut listener_binding = loop {
-            match TcpListener::bind(address) {
-                Ok(listener) => break listener,
-                Err(err) if err.kind() == io::ErrorKind::AddrInUse => {
-                    address.set_port(address.port() + 1);
-                }
-                Err(err) => panic!("Failed starting server: {}", err),
+    pub fn new(address: SocketAddr) -> Self {
+        let mut listener_binding = match TcpListener::bind(address) {
+            Ok(listener) => listener,
+            Err(err) if err.kind() == io::ErrorKind::AddrInUse => {
+                panic!("Address already in use: {}", address)
             }
-
-            bind_retry_count += 1;
-            if bind_retry_count > MAX_BIND_RETRY {
-                panic!("Failed finding open ports to bind the server to.");
-            }
+            Err(err) => panic!("Failed starting server: {}", err),
         };
 
         let poller = Poll::new().unwrap();

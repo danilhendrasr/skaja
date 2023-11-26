@@ -3,7 +3,7 @@ name = "integration_tests"
 version = "0.1.0"
 edition = "2021"
 
-[dev-dependencies]
+[dependencies]
 skaja_server = { path = "../skaja-server" }
 skaja_client = { path = "../skaja-client" }
 skaja_lib = { path = "../skaja-lib" }
