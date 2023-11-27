@@ -1,8 +1,8 @@
-use integration_tests::test_utils::{new_client, run_test};
+use integration_tests::test_utils::{new_client, with_server};
 
 #[test]
 pub fn client1_set_command_result_should_be_visible_to_client2() {
-    run_test(|server_address| {
+    with_server(|server_address| {
         let mut client1 = new_client(&server_address);
         let mut client2 = new_client(&server_address);
 

@@ -42,9 +42,10 @@ pub mod test_utils {
         skaja_client::Client::connect(server_address.parse().unwrap())
     }
 
-    /// Launches a server process on a random port, runs the provided test function,
+    /// Run the provided test function with a server process. It launches a server
+    /// process on a random port, runs the provided test function,
     /// and then kills the server.
-    pub fn run_test<T>(test: T)
+    pub fn with_server<T>(test: T)
     where
         T: FnOnce(String) + panic::UnwindSafe,
     {

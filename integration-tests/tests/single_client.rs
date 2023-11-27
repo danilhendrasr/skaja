@@ -1,8 +1,8 @@
-use integration_tests::test_utils::{new_client, run_test};
+use integration_tests::test_utils::{new_client, with_server};
 
 #[test]
 pub fn setting_a_key_should_result_in_ok() {
-    run_test(|server_address| {
+    with_server(|server_address| {
         let mut client = new_client(&server_address);
         let response = client
             .send(skaja_lib::Command::Set(
@@ -22,7 +22,7 @@ pub fn setting_a_key_should_result_in_ok() {
 
 #[test]
 pub fn getting_existing_key_should_result_in_ok() {
-    run_test(|server_address| {
+    with_server(|server_address| {
         let mut client = new_client(&server_address);
         client
             .send(skaja_lib::Command::Set(
@@ -42,7 +42,7 @@ pub fn getting_existing_key_should_result_in_ok() {
 
 #[test]
 pub fn getting_non_existing_key_should_result_in_client_error() {
-    run_test(|server_address| {
+    with_server(|server_address| {
         let mut client = new_client(&server_address);
         let response = client
             .send(skaja_lib::Command::Get("hello".to_string()))
@@ -55,7 +55,7 @@ pub fn getting_non_existing_key_should_result_in_client_error() {
 
 #[test]
 pub fn deleting_existing_key_should_result_in_ok() {
-    run_test(|server_address| {
+    with_server(|server_address| {
         let mut client = new_client(&server_address);
         client
             .send(skaja_lib::Command::Set(
@@ -74,7 +74,7 @@ pub fn deleting_existing_key_should_result_in_ok() {
 
 #[test]
 pub fn deleting_non_existent_key_should_result_in_client_error() {
-    run_test(|server_address| {
+    with_server(|server_address| {
         let mut client = new_client(&server_address);
         let response = client
             .send(skaja_lib::Command::Delete("hello".to_string()))
