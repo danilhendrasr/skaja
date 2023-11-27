@@ -1,13 +1,10 @@
 mod constants;
 mod domains;
 
-pub use domains::*;
-
-use std::io::{self, Error, ErrorKind, Read};
-
-use mio::net::TcpStream;
-
 pub use constants::*;
+pub use domains::*;
+use mio::net::TcpStream;
+use std::io::{self, Error, ErrorKind, Read};
 
 impl ReadToRequest for TcpStream {
     fn read_to_request(&mut self) -> Result<Request, io::Error> {

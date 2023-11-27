@@ -1,6 +1,5 @@
-use std::{env::Args, io};
-
 use super::{ReadToRequest, Request};
+use std::{env::Args, io};
 
 /// The commands that can be sent to the server.
 #[derive(Debug, PartialEq)]

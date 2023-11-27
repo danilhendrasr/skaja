@@ -1,7 +1,6 @@
-use std::io;
-
 use clap::Parser;
 pub use skaja_server::Server;
+use std::io;
 
 #[derive(clap::Parser)]
 pub struct Args {

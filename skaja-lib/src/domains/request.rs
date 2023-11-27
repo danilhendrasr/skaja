@@ -1,6 +1,5 @@
-use std::io;
-
 use super::command::Command;
+use std::io;
 
 pub trait ReadToRequest {
     /// Reads target into a [`Request`] struct without taking ownership of the target.

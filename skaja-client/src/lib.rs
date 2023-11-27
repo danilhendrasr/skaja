@@ -1,12 +1,11 @@
 use core::panic;
+use mio::{net::TcpStream, Events, Interest, Poll};
+use skaja_lib::{Command, ReadToRequest, ReadToResponse, Response, CLIENT_TOKEN};
 use std::{
     io::{self, Write},
     net::SocketAddr,
     time::Duration,
 };
-
-use mio::{net::TcpStream, Events, Interest, Poll};
-use skaja_lib::{Command, ReadToRequest, ReadToResponse, Response, CLIENT_TOKEN};
 
 pub struct Client {
     connection: TcpStream,

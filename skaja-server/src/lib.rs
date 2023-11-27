@@ -1,16 +1,14 @@
-use std::{
-    collections::HashMap,
-    io::{self, Write},
-    net::SocketAddr,
-};
-
 use mio::{
     event::Event,
     net::{TcpListener, TcpStream},
     Events, Interest, Poll, Token,
 };
-
 use skaja_lib::{Command, RawResponse, ReadToRequest, StatusCodes, SERVER_TOKEN};
+use std::{
+    collections::HashMap,
+    io::{self, Write},
+    net::SocketAddr,
+};
 
 pub struct Server {
     address: SocketAddr,

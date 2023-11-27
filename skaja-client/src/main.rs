@@ -1,7 +1,6 @@
-use std::env;
-
 pub use skaja_client::Client;
 use skaja_lib::Command;
+use std::env;
 
 fn main() -> Result<(), String> {
     let mut client = Client::connect("127.0.0.1:3002".parse().unwrap());
