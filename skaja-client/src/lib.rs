@@ -16,7 +16,10 @@ impl Client {
     /// Connect to the given address. Panics if the connection fails.
     pub fn connect(address: SocketAddr) -> Self {
         let mut connection = match TcpStream::connect(address) {
-            Ok(stream) => stream,
+            Ok(stream) => {
+                println!("Connected to server at {}", address);
+                stream
+            }
             Err(msg) => panic!("Failed connecting to server: {}", msg),
         };
 

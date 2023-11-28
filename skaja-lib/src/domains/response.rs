@@ -160,7 +160,6 @@ mod raw_response {
             RawResponse::new(StatusCodes::ClientErr, r#"Key "testing" not found."#.into());
         let payload = raw_response.payload();
 
-        println!("{:?}", payload);
         let header = &payload[0..4];
         let msg_header = &payload[4..8];
         let msg = &payload[8..];

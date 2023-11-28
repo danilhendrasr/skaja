@@ -3,7 +3,7 @@ use skaja_lib::Command;
 use std::env;
 
 fn main() -> Result<(), String> {
-    let mut client = Client::connect("127.0.0.1:3002".parse().unwrap());
+    let mut client = Client::connect("127.0.0.1:8000".parse().unwrap());
     let command = Command::try_from(env::args())?;
 
     match client.send(command) {
