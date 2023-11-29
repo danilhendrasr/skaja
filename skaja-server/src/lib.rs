@@ -9,6 +9,7 @@ use std::{
     io::{self, Write},
     net::SocketAddr,
 };
+use tracing::{debug, error, info};
 
 pub struct Server {
     address: SocketAddr,
@@ -25,17 +26,31 @@ impl Server {
         let mut listener_binding = match TcpListener::bind(address) {
             Ok(listener) => listener,
             Err(err) if err.kind() == io::ErrorKind::AddrInUse => {
-                panic!("Address already in use: {}", address)
+                error!("Address already in use: {}", address);
+                std::process::exit(-1);
             }
-            Err(err) => panic!("Failed starting server: {}", err),
+            Err(err) => {
+                error!("Failed starting server: {}", err);
+                std::process::exit(-1);
+            }
         };
 
-        let poller = Poll::new().unwrap();
+        debug!("Server bound to: {}", address);
+
+        let poller = Poll::new().unwrap_or_else(|_| {
+            error!("Failed creating poller.");
+            std::process::exit(-1);
+        });
+        debug!("Successfully created poller.");
 
         poller
             .registry()
             .register(&mut listener_binding, SERVER_TOKEN, Interest::READABLE)
-            .unwrap();
+            .unwrap_or_else(|_| {
+                error!("Failed registering server to poller.");
+                std::process::exit(-1);
+            });
+        debug!("Successfully registered server to poller.");
 
         Self {
             address,
@@ -52,17 +67,20 @@ impl Server {
 
     /// Start the server and listen for incoming connections.
     pub fn listen(&mut self) -> Result<(), io::Error> {
-        println!("Server listening on: {}", self.address());
+        info!("Server listening on: {}", self.address());
         let mut events_store = Events::with_capacity(1024);
         // Unique token for each connection
         let unique_token = Token(SERVER_TOKEN.0 + 1);
 
         loop {
+            debug!("Polling for events...");
             if let Err(e) = self.poller.poll(&mut events_store, None) {
                 if e.kind() == io::ErrorKind::Interrupted {
+                    debug!("Polling interrupted.");
                     continue;
                 }
 
+                error!("An error occurred when polling events: {}", e);
                 return Err(e);
             }
 
@@ -76,12 +94,16 @@ impl Server {
                                 // listener has no more incoming connections queued,
                                 // so we can return to polling and wait for some
                                 // more.
+                                debug!("No more incoming connections, returning to polling.");
                                 break;
                             }
-                            Err(e) => return Err(e),
+                            Err(e) => {
+                                error!("Failed accepting connection: {}", e);
+                                return Err(e);
+                            }
                         };
 
-                        println!("Accepted connection from: {}", address);
+                        info!("Accepted connection from: {}", address);
 
                         let connection_token = Token(unique_token.0 + self.connections_store.len());
                         self.poller.registry().register(
@@ -94,6 +116,7 @@ impl Server {
                             .insert(connection_token, (connection, None));
                     }
                     token => {
+                        debug!("Handling connection event: {:?}", token);
                         let done = match self.handle_connection_event(event) {
                             Err(e) if e.kind() == io::ErrorKind::WouldBlock => break,
 
@@ -113,8 +136,11 @@ impl Server {
                         if done {
                             if let Some((mut conn, _)) = self.connections_store.remove(&token) {
                                 self.poller.registry().deregister(&mut conn)?;
-                                println!("Closed connection: {}", conn.peer_addr().unwrap());
+                                info!("Closed connection: {}", conn.peer_addr().unwrap());
+                                continue;
                             }
+
+                            debug!("Unable to remove connection from store, returning to polling.");
                         }
                     }
                 }
@@ -123,12 +149,16 @@ impl Server {
     }
 
     fn handle_connection_event(&mut self, event: &Event) -> Result<(), io::Error> {
-        let (connection, payload) = self
-            .connections_store
-            .get_mut(&event.token())
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to get connection."))?;
+        let (connection, payload) =
+            self.connections_store
+                .get_mut(&event.token())
+                .ok_or_else(|| {
+                    error!("Failed getting connection from store.");
+                    io::Error::new(io::ErrorKind::Other, "Failed to get connection.")
+                })?;
 
         if event.is_writable() {
+            debug!("Handling writable event.");
             let response: RawResponse;
             match payload.as_ref().unwrap() {
                 Command::Get(key) => match self.data_store.get(key) {
@@ -161,21 +191,35 @@ impl Server {
             }
 
             let payload: Vec<u8> = response.into();
-            connection.write_all(&payload)?;
+            connection.write_all(&payload).map_err(|e| {
+                error!("Failed writing response: {}", e);
+                e
+            })?;
+            debug!("Successfully wrote response.");
+
             self.poller
                 .registry()
                 .reregister(connection, event.token(), Interest::READABLE)?;
+            debug!("Successfully reregistered connection.");
 
             return Ok(());
         }
 
         if event.is_readable() {
-            let request = connection.read_to_request()?;
+            debug!("Handling readable event.");
+            let request = connection.read_to_request().map_err(|e| {
+                error!("Failed parsing payload to Request: {:?}", e);
+                e
+            })?;
 
             let command: Command = match request.try_into() {
                 Ok(command) => command,
                 Err(err_msg) => {
-                    println!("Invalid payload: {}", err_msg);
+                    error!(
+                        "Payload is invalid, failed parsing Request to Command: {}",
+                        err_msg
+                    );
+
                     return Ok(());
                 }
             };
@@ -183,6 +227,7 @@ impl Server {
             self.poller
                 .registry()
                 .reregister(connection, event.token(), Interest::WRITABLE)?;
+            debug!("Successfully reregistered connection.");
 
             self.connections_store
                 .entry(event.token())

@@ -54,6 +54,8 @@ pub fn launch_server_process() -> (std::process::Child, String) {
         if line.contains("Server listening on") {
             server_listening = true;
             break;
+        } else if line.contains("Address already in use") {
+            return launch_server_process();
         }
     }
 
@@ -64,7 +66,7 @@ pub fn launch_server_process() -> (std::process::Child, String) {
 
         // Wait for the server to start listening
         for line in lines.flatten() {
-            if line.contains("panic") {
+            if line.contains("Address already in use") {
                 println!("Process panicked, relaunching server in another port");
                 return launch_server_process();
             }

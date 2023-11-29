@@ -7,3 +7,5 @@ edition = "2021"
 skaja_lib = { path = "../skaja-lib" }
 mio = { version = "0.8.9", features = ["os-poll", "net"] }
 clap = { version = "4.4.8", features = ["derive"] }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["fmt"] }
