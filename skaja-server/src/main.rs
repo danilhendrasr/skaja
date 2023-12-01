@@ -13,7 +13,7 @@ pub struct Args {
 
 fn main() -> Result<(), io::Error> {
     let args = Args::parse();
-    let address = args.address.unwrap_or("127.0.0.1:3000".to_string());
+    let address = args.address.unwrap_or("127.0.0.1:8000".to_string());
 
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::TRACE)
