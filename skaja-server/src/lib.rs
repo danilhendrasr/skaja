@@ -118,6 +118,18 @@ impl Server {
                             Interest::READABLE,
                         )?;
 
+                        // For some reason we need to reregister the listener
+                        // because if not, when there are multiple clients connected
+                        // there will be cases where one of the clients just randomly
+                        // hangs and doesn't receive any response from the server.
+                        // I don't know why this happens, but reregistering the
+                        // listener fixes it.
+                        self.poller.registry().reregister(
+                            &mut self.listener,
+                            SERVER_TOKEN,
+                            Interest::READABLE,
+                        )?;
+
                         self.connections_store.insert(
                             connection_token,
                             Connection {
