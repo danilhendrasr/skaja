@@ -33,6 +33,10 @@ impl Client {
         Self { connection, poller }
     }
 
+    pub fn shutdown(&mut self) -> Result<(), io::Error> {
+        self.connection.shutdown(std::net::Shutdown::Both)
+    }
+
     pub fn send(&mut self, mut command: Command) -> Result<Response, io::Error> {
         let request = command.read_to_request()?;
 
@@ -44,6 +48,8 @@ impl Client {
             for event in events.iter() {
                 if event.is_writable() {
                     self.connection.write_all(request.payload())?;
+                    self.connection.flush()?;
+
                     self.poller.registry().reregister(
                         &mut self.connection,
                         CLIENT_TOKEN,
@@ -62,6 +68,15 @@ impl Client {
                     return Ok(response);
                 }
             }
+        }
+    }
+}
+
+impl Drop for Client {
+    fn drop(&mut self) {
+        match self.shutdown() {
+            Ok(_) => println!("Successfully shuts down client."),
+            Err(msg) => eprintln!("Failed shutting down client: {}", msg),
         }
     }
 }
