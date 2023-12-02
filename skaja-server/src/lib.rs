@@ -11,12 +11,18 @@ use std::{
 };
 use tracing::{debug, error, info};
 
+pub struct Connection {
+    connection: TcpStream,
+    ip: SocketAddr,
+    payload: Option<Command>,
+}
+
 pub struct Server {
     address: SocketAddr,
     listener: TcpListener,
     poller: Poll,
     data_store: HashMap<String, String>,
-    connections_store: HashMap<Token, (TcpStream, Option<Command>)>,
+    connections_store: HashMap<Token, Connection>,
 }
 
 impl Server {
@@ -112,8 +118,14 @@ impl Server {
                             Interest::READABLE,
                         )?;
 
-                        self.connections_store
-                            .insert(connection_token, (connection, None));
+                        self.connections_store.insert(
+                            connection_token,
+                            Connection {
+                                connection,
+                                ip: address,
+                                payload: None,
+                            },
+                        );
                     }
                     token => {
                         debug!("Handling connection event: {:?}", token);
@@ -122,11 +134,11 @@ impl Server {
 
                             Ok(_) => false,
                             Err(e) if e.kind() == io::ErrorKind::Interrupted => false,
+                            Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => false,
 
                             // Connection is done only if we get the following errors.
                             // I don't know if this is the best way to handle this. But it works.
                             Err(e) if e.kind() == io::ErrorKind::ConnectionReset => true,
-                            Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => true,
                             Err(e) if e.kind() == io::ErrorKind::ConnectionAborted => true,
                             Err(e) if e.kind() == io::ErrorKind::BrokenPipe => true,
 
@@ -134,9 +146,9 @@ impl Server {
                         };
 
                         if done {
-                            if let Some((mut conn, _)) = self.connections_store.remove(&token) {
-                                self.poller.registry().deregister(&mut conn)?;
-                                info!("Closed connection: {}", conn.peer_addr().unwrap());
+                            if let Some(mut conn) = self.connections_store.remove(&token) {
+                                info!("Connection closed: {}", conn.ip);
+                                self.poller.registry().deregister(&mut conn.connection)?;
                                 continue;
                             }
 
@@ -149,13 +161,17 @@ impl Server {
     }
 
     fn handle_connection_event(&mut self, event: &Event) -> Result<(), io::Error> {
-        let (connection, payload) =
-            self.connections_store
-                .get_mut(&event.token())
-                .ok_or_else(|| {
-                    error!("Failed getting connection from store.");
-                    io::Error::new(io::ErrorKind::Other, "Failed to get connection.")
-                })?;
+        let Connection {
+            connection,
+            payload,
+            ip: _,
+        } = self
+            .connections_store
+            .get_mut(&event.token())
+            .ok_or_else(|| {
+                error!("Failed getting connection from store.");
+                io::Error::new(io::ErrorKind::Other, "Failed to get connection.")
+            })?;
 
         if event.is_writable() {
             debug!("Handling writable event.");
@@ -195,6 +211,7 @@ impl Server {
                 error!("Failed writing response: {}", e);
                 e
             })?;
+            connection.flush()?;
             debug!("Successfully wrote response.");
 
             self.poller
@@ -232,7 +249,7 @@ impl Server {
             self.connections_store
                 .entry(event.token())
                 .and_modify(|val| {
-                    val.1 = Some(command);
+                    val.payload = Some(command);
                 });
         }
 

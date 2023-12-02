@@ -8,7 +8,6 @@ use std::io::{self, Error, ErrorKind, Read};
 
 impl ReadToRequest for TcpStream {
     fn read_to_request(&mut self) -> Result<Request, io::Error> {
-        let mut done_reading_command = false;
         let mut received_data = Vec::new();
 
         let mut next_chunk_len = 4;
@@ -17,7 +16,6 @@ impl ReadToRequest for TcpStream {
 
         loop {
             if cur_chunk > chunks_len {
-                done_reading_command = true;
                 break;
             }
 
@@ -48,18 +46,10 @@ impl ReadToRequest for TcpStream {
 
                 // Would block "errors" are the OS's way of saying that the
                 // connection is not actually ready to perform this I/O operation.
-                Err(ref err) if err.kind() == ErrorKind::WouldBlock => break,
                 Err(ref err) if err.kind() == ErrorKind::Interrupted => continue,
                 // Other errors we'll consider fatal.
                 Err(err) => return Err(err),
             }
-        }
-
-        if !done_reading_command {
-            return Err(Error::new(
-                ErrorKind::WouldBlock,
-                "Connection not ready to be read from.",
-            ));
         }
 
         Ok(Request::new_with_payload(received_data))
