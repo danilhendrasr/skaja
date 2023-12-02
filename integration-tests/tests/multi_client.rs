@@ -1,9 +1,12 @@
+use std::time::Duration;
+
 use integration_tests::test_utils::{new_client, with_server};
 
 #[test]
 pub fn client1_set_command_result_should_be_visible_to_client2() {
     with_server(|server_address| {
         let mut client1 = new_client(&server_address);
+        std::thread::sleep(Duration::from_millis(5));
         let mut client2 = new_client(&server_address);
 
         client1
