@@ -209,6 +209,7 @@ dependencies = [
 name = "skaja_client"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "mio",
  "skaja_lib",
 ]
