@@ -193,7 +193,7 @@ impl Server {
                     Some(value) => response = RawResponse::new(StatusCodes::Ok, value.to_string()),
                     None => {
                         response = RawResponse::new(
-                            StatusCodes::ClientErr,
+                            StatusCodes::ErrNotFound,
                             format!("Key \"{key}\" not found."),
                         )
                     }
@@ -206,9 +206,9 @@ impl Server {
                     );
                 }
                 Command::Delete(key) => {
-                    if self.data_store.remove(key).is_none() {
+                    if let None = self.data_store.remove(key) {
                         response = RawResponse::new(
-                            StatusCodes::ClientErr,
+                            StatusCodes::ErrNotFound,
                             format!("Key \"{key}\" not found."),
                         );
                     } else {

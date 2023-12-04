@@ -45,7 +45,7 @@ pub fn getting_non_existing_key_should_result_in_client_error() {
             .send(skaja_lib::Command::Get("hello".to_string()))
             .unwrap();
         let status_code = response.status_code();
-        assert_eq!(status_code, skaja_lib::StatusCodes::ClientErr);
+        assert_eq!(status_code, skaja_lib::StatusCodes::ErrNotFound);
         assert_eq!(response.message(), Some(r#"Key "hello" not found."#));
     })
 }
@@ -77,7 +77,7 @@ pub fn deleting_non_existent_key_should_result_in_client_error() {
             .send(skaja_lib::Command::Delete("hello".to_string()))
             .unwrap();
         let status_code = response.status_code();
-        assert_eq!(status_code, skaja_lib::StatusCodes::ClientErr);
+        assert_eq!(status_code, skaja_lib::StatusCodes::ErrNotFound);
         assert_eq!(response.message(), Some(r#"Key "hello" not found."#));
     })
 }

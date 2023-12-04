@@ -10,6 +10,7 @@ pub enum StatusCodes {
     Ok,
     ClientErr,
     ServerErr,
+    ErrNotFound,
 }
 
 impl std::fmt::Display for StatusCodes {
@@ -18,6 +19,7 @@ impl std::fmt::Display for StatusCodes {
             StatusCodes::Ok => "OK",
             StatusCodes::ClientErr => "Client error",
             StatusCodes::ServerErr => "Server error",
+            StatusCodes::ErrNotFound => "Key not found",
         };
 
         write!(f, "{}", msg)
@@ -30,6 +32,7 @@ impl From<StatusCodes> for u32 {
             StatusCodes::Ok => 0,
             StatusCodes::ClientErr => 1,
             StatusCodes::ServerErr => 2,
+            StatusCodes::ErrNotFound => 3,
         }
     }
 }
@@ -40,6 +43,7 @@ impl From<u32> for StatusCodes {
             0 => StatusCodes::Ok,
             1 => StatusCodes::ClientErr,
             2 => StatusCodes::ServerErr,
+            3 => StatusCodes::ErrNotFound,
             _ => panic!("Invalid status code."),
         }
     }

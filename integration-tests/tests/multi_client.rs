@@ -53,6 +53,6 @@ pub fn client1_del_command_result_should_be_visible_to_client2() {
             .unwrap();
 
         let status_code = response.status_code();
-        assert_eq!(status_code, skaja_lib::StatusCodes::ClientErr);
+        assert_eq!(status_code, skaja_lib::StatusCodes::ErrNotFound);
     })
 }
