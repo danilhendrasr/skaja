@@ -13,7 +13,7 @@ pub fn setting_a_key_should_result_in_ok() {
 
         let status_code = response.status_code();
         assert_eq!(status_code, skaja_lib::StatusCodes::Ok);
-        assert_eq!(response.message(), Some(r#"Key "hello" set to "world"."#))
+        assert_eq!(response.message(), None)
     });
 }
 
@@ -46,7 +46,7 @@ pub fn getting_non_existing_key_should_result_in_client_error() {
             .unwrap();
         let status_code = response.status_code();
         assert_eq!(status_code, skaja_lib::StatusCodes::ErrNotFound);
-        assert_eq!(response.message(), Some(r#"Key "hello" not found."#));
+        assert_eq!(response.message(), None);
     })
 }
 
@@ -65,7 +65,7 @@ pub fn deleting_existing_key_should_result_in_ok() {
             .unwrap();
         let status_code = response.status_code();
         assert_eq!(status_code, skaja_lib::StatusCodes::Ok);
-        assert_eq!(response.message(), Some(r#"Key "hello" deleted."#));
+        assert_eq!(response.message(), None);
     })
 }
 
@@ -78,6 +78,6 @@ pub fn deleting_non_existent_key_should_result_in_client_error() {
             .unwrap();
         let status_code = response.status_code();
         assert_eq!(status_code, skaja_lib::StatusCodes::ErrNotFound);
-        assert_eq!(response.message(), Some(r#"Key "hello" not found."#));
+        assert_eq!(response.message(), None);
     })
 }

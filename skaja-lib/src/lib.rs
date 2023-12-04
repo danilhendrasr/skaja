@@ -84,6 +84,11 @@ impl ReadToResponse for TcpStream {
                     if chunk_is_msg_header {
                         next_chunk_len =
                             u32::from_ne_bytes(buf.clone().try_into().unwrap()) as usize;
+
+                        if next_chunk_len == 0 {
+                            done_reading = true;
+                            break;
+                        }
                     }
 
                     received_data.append(&mut buf);
@@ -92,10 +97,14 @@ impl ReadToResponse for TcpStream {
 
                 // Would block "errors" are the OS's way of saying that the
                 // connection is not actually ready to perform this I/O operation.
-                Err(ref err) if err.kind() == ErrorKind::WouldBlock => break,
+                Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
+                    break;
+                }
                 Err(ref err) if err.kind() == ErrorKind::Interrupted => continue,
                 // Other errors we'll consider fatal.
-                Err(err) => return Err(err),
+                Err(err) => {
+                    return Err(err);
+                }
             }
         }
 

@@ -190,30 +190,20 @@ impl Server {
             let response: RawResponse;
             match payload.as_ref().unwrap() {
                 Command::Get(key) => match self.data_store.get(key) {
-                    Some(value) => response = RawResponse::new(StatusCodes::Ok, value.to_string()),
-                    None => {
-                        response = RawResponse::new(
-                            StatusCodes::ErrNotFound,
-                            format!("Key \"{key}\" not found."),
-                        )
+                    Some(value) => {
+                        response = RawResponse::new(StatusCodes::Ok, Some(value.to_string()))
                     }
+                    None => response = RawResponse::new(StatusCodes::ErrNotFound, None),
                 },
                 Command::Set(key, value) => {
                     self.data_store.insert(key.to_string(), value.to_string());
-                    response = RawResponse::new(
-                        StatusCodes::Ok,
-                        format!("Key \"{key}\" set to \"{value}\"."),
-                    );
+                    response = RawResponse::new(StatusCodes::Ok, None);
                 }
                 Command::Delete(key) => {
                     if let None = self.data_store.remove(key) {
-                        response = RawResponse::new(
-                            StatusCodes::ErrNotFound,
-                            format!("Key \"{key}\" not found."),
-                        );
+                        response = RawResponse::new(StatusCodes::ErrNotFound, None);
                     } else {
-                        response =
-                            RawResponse::new(StatusCodes::Ok, format!("Key \"{key}\" deleted."));
+                        response = RawResponse::new(StatusCodes::Ok, None);
                     }
                 }
             }

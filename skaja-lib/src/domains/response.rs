@@ -66,20 +66,28 @@ impl From<u32> for StatusCodes {
 pub struct RawResponse(pub Vec<u8>);
 
 impl RawResponse {
-    pub fn new(status_code: StatusCodes, msg: String) -> Self {
+    pub fn new(status_code: StatusCodes, msg: Option<String>) -> Self {
         let mut payload: Vec<u8> = Vec::new();
 
         // The length of the status code string, truncated to 32bit.
         let status_code_int: u32 = status_code.into();
-
-        // Status code + the number of arguments for the command
-        let msg_len = msg.len() as u32;
-
         payload.append(&mut status_code_int.to_ne_bytes().to_vec());
+
+        if let Some(msg) = msg {
+            // Status code + the number of arguments for the command
+            let msg_len = msg.len() as u32;
+
+            payload.append(&mut msg_len.to_ne_bytes().to_vec());
+            payload.append(&mut msg.into_bytes());
+
+            return RawResponse(payload);
+        }
+
+        let msg_len = 0 as u32;
+        let msg = "".to_string();
         payload.append(&mut msg_len.to_ne_bytes().to_vec());
         payload.append(&mut msg.into_bytes());
-
-        RawResponse(payload)
+        return RawResponse(payload);
     }
 
     pub fn payload(&self) -> &[u8] {
@@ -122,10 +130,14 @@ impl Response {
 
 impl From<RawResponse> for Response {
     fn from(value: RawResponse) -> Self {
-        let raw_bytes = value.payload();
+        let payload = value.payload();
 
-        let status_code = u32::from_ne_bytes(raw_bytes[0..4].try_into().unwrap());
-        let msg_len = u32::from_ne_bytes(raw_bytes[4..8].try_into().unwrap());
+        let status_code = u32::from_ne_bytes(payload[0..4].try_into().unwrap());
+        let mut msg_len = 0;
+        if payload.len() > 8 {
+            msg_len = u32::from_ne_bytes(payload[4..8].try_into().unwrap());
+        }
+
         if msg_len == 0 {
             return Response {
                 status_code: StatusCodes::from(status_code),
@@ -133,7 +145,7 @@ impl From<RawResponse> for Response {
             };
         }
 
-        let msg = String::from_utf8_lossy(&raw_bytes[8..(8 + msg_len as usize)]);
+        let msg = String::from_utf8_lossy(&payload[8..(8 + msg_len as usize)]);
         Response {
             status_code: StatusCodes::from(status_code),
             message: Some(msg.into()),
@@ -143,11 +155,20 @@ impl From<RawResponse> for Response {
 
 impl std::fmt::Display for Response {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = match self.message {
-            Some(ref msg) => msg,
-            None => "",
+        let msg = match self.status_code {
+            StatusCodes::Ok => {
+                if let Some(ref msg) = self.message {
+                    msg
+                } else {
+                    "<Ok>"
+                }
+            }
+            StatusCodes::ErrNotFound => "<nil>",
+            StatusCodes::ClientErr => "<Client error>",
+            StatusCodes::ServerErr => "<Server error>",
         };
-        let msg = format!("[{}]: {}", self.status_code, msg);
+
+        let msg = format!("{}", msg);
         write!(f, "{}", msg)
     }
 }
@@ -159,7 +180,7 @@ mod raw_response {
 
     #[test]
     pub fn new_ok_should_result_in_correct_payload() {
-        let raw_response = RawResponse::new(StatusCodes::Ok, "OK".into());
+        let raw_response = RawResponse::new(StatusCodes::Ok, Some("OK".to_string()));
         let payload = raw_response.payload();
 
         let header = &payload[0..4];
@@ -174,8 +195,10 @@ mod raw_response {
 
     #[test]
     pub fn new_client_err_should_result_in_correct_payload() {
-        let raw_response =
-            RawResponse::new(StatusCodes::ClientErr, r#"Key "testing" not found."#.into());
+        let raw_response = RawResponse::new(
+            StatusCodes::ClientErr,
+            Some(r#"Key "testing" not found."#.to_string()),
+        );
         let payload = raw_response.payload();
 
         let header = &payload[0..4];
@@ -196,7 +219,7 @@ mod raw_response {
 
     #[test]
     pub fn new_server_err_should_result_in_correct_payload() {
-        let raw_response = RawResponse::new(StatusCodes::ServerErr, r#"Server error"#.into());
+        let raw_response = RawResponse::new(StatusCodes::ServerErr, Some(r#"Server error"#.into()));
         let payload = raw_response.payload();
 
         let header = &payload[0..4];
@@ -214,7 +237,7 @@ mod raw_response {
 
     #[test]
     pub fn ok_should_be_parsed_correctly_to_response() {
-        let raw_response = RawResponse::new(StatusCodes::Ok, "OK".into());
+        let raw_response = RawResponse::new(StatusCodes::Ok, Some("OK".into()));
         let response: Response = raw_response.into();
 
         assert_eq!(response.status_code(), StatusCodes::Ok);
@@ -223,7 +246,8 @@ mod raw_response {
 
     #[test]
     pub fn client_err_should_be_parsed_correctly_to_response() {
-        let raw_response = RawResponse::new(StatusCodes::ClientErr, "There's an error".into());
+        let raw_response =
+            RawResponse::new(StatusCodes::ClientErr, Some("There's an error".into()));
         let response: Response = raw_response.into();
 
         assert_eq!(response.status_code(), StatusCodes::ClientErr);
@@ -232,7 +256,7 @@ mod raw_response {
 
     #[test]
     pub fn server_err_should_be_parsed_correctly_to_response() {
-        let raw_response = RawResponse::new(StatusCodes::ServerErr, "Server error".into());
+        let raw_response = RawResponse::new(StatusCodes::ServerErr, Some("Server error".into()));
         let response: Response = raw_response.into();
 
         assert_eq!(response.status_code(), StatusCodes::ServerErr);
