@@ -92,11 +92,11 @@ impl From<RawResponse> for Vec<u8> {
 #[derive(Debug)]
 pub struct Response {
     status_code: StatusCodes,
-    message: String,
+    message: Option<String>,
 }
 
 impl Response {
-    pub fn new(status_code: StatusCodes, msg: String) -> Self {
+    pub fn new(status_code: StatusCodes, msg: Option<String>) -> Self {
         Response {
             status_code,
             message: msg,
@@ -107,8 +107,12 @@ impl Response {
         self.status_code
     }
 
-    pub fn message(&self) -> &str {
-        &self.message
+    pub fn message(&self) -> Option<&str> {
+        if let Some(ref msg) = self.message {
+            return Some(msg.as_str());
+        }
+
+        None
     }
 }
 
@@ -118,18 +122,28 @@ impl From<RawResponse> for Response {
 
         let status_code = u32::from_ne_bytes(raw_bytes[0..4].try_into().unwrap());
         let msg_len = u32::from_ne_bytes(raw_bytes[4..8].try_into().unwrap());
-        let msg = String::from_utf8_lossy(&raw_bytes[8..(8 + msg_len as usize)]);
+        if msg_len == 0 {
+            return Response {
+                status_code: StatusCodes::from(status_code),
+                message: None,
+            };
+        }
 
+        let msg = String::from_utf8_lossy(&raw_bytes[8..(8 + msg_len as usize)]);
         Response {
             status_code: StatusCodes::from(status_code),
-            message: msg.into(),
+            message: Some(msg.into()),
         }
     }
 }
 
 impl std::fmt::Display for Response {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = format!("[{}]: {}", self.status_code, self.message);
+        let msg = match self.message {
+            Some(ref msg) => msg,
+            None => "",
+        };
+        let msg = format!("[{}]: {}", self.status_code, msg);
         write!(f, "{}", msg)
     }
 }
@@ -200,7 +214,7 @@ mod raw_response {
         let response: Response = raw_response.into();
 
         assert_eq!(response.status_code(), StatusCodes::Ok);
-        assert_eq!(response.message(), "OK");
+        assert_eq!(response.message(), Some("OK"));
     }
 
     #[test]
@@ -209,7 +223,7 @@ mod raw_response {
         let response: Response = raw_response.into();
 
         assert_eq!(response.status_code(), StatusCodes::ClientErr);
-        assert_eq!(response.message(), "There's an error");
+        assert_eq!(response.message(), Some("There's an error"));
     }
 
     #[test]
@@ -218,6 +232,6 @@ mod raw_response {
         let response: Response = raw_response.into();
 
         assert_eq!(response.status_code(), StatusCodes::ServerErr);
-        assert_eq!(response.message(), "Server error");
+        assert_eq!(response.message(), Some("Server error"));
     }
 }

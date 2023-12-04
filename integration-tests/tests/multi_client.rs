@@ -19,7 +19,7 @@ pub fn client1_set_command_result_should_be_visible_to_client2() {
 
         let status_code = response.status_code();
         assert_eq!(status_code, skaja_lib::StatusCodes::Ok);
-        assert_eq!(response.message(), "world".to_string());
+        assert_eq!(response.message(), Some("world"));
     })
 }
 
@@ -42,7 +42,7 @@ pub fn client1_del_command_result_should_be_visible_to_client2() {
 
         let status_code = response.status_code();
         assert_eq!(status_code, skaja_lib::StatusCodes::Ok);
-        assert_eq!(response.message(), "world".to_string());
+        assert_eq!(response.message(), Some("world"));
 
         client1
             .send(skaja_lib::Command::Delete("hello".to_string()))
