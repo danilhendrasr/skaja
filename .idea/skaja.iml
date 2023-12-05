@@ -9,6 +9,7 @@
       <sourceFolder url="file://$MODULE_DIR$/skaja-client/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/skaja-lib/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/skaja-server/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/integration-tests/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

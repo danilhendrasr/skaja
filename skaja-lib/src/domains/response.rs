@@ -83,11 +83,11 @@ impl RawResponse {
             return RawResponse(payload);
         }
 
-        let msg_len = 0 as u32;
+        let msg_len = 0_u32;
         let msg = "".to_string();
         payload.append(&mut msg_len.to_ne_bytes().to_vec());
         payload.append(&mut msg.into_bytes());
-        return RawResponse(payload);
+        RawResponse(payload)
     }
 
     pub fn payload(&self) -> &[u8] {
@@ -168,7 +168,7 @@ impl std::fmt::Display for Response {
             StatusCodes::ServerErr => "<Server error>",
         };
 
-        let msg = format!("{}", msg);
+        let msg = msg.to_string();
         write!(f, "{}", msg)
     }
 }

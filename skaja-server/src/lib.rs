@@ -6,10 +6,14 @@ use mio::{
 use skaja_lib::{Command, RawResponse, ReadToRequest, StatusCodes, SERVER_TOKEN};
 use std::{
     collections::HashMap,
+    default::Default,
     io::{self, Write},
     net::SocketAddr,
 };
 use tracing::{debug, error, info};
+
+mod domains;
+pub use domains::*;
 
 pub struct Connection {
     connection: TcpStream,
@@ -18,69 +22,107 @@ pub struct Connection {
 }
 
 pub struct Server {
-    address: SocketAddr,
-    listener: TcpListener,
-    poller: Poll,
+    address: Option<SocketAddr>,
+    listener: Option<TcpListener>,
+    poller: Option<Poll>,
     data_store: HashMap<String, String>,
     connections_store: HashMap<Token, Connection>,
 }
 
+impl Default for Server {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Server {
-    /// Create a new server instance bound to the given address.
-    /// Panics if the binding fails.
-    pub fn new(address: SocketAddr) -> Self {
-        let mut listener_binding = match TcpListener::bind(address) {
-            Ok(listener) => listener,
-            Err(err) if err.kind() == io::ErrorKind::AddrInUse => {
-                error!("Address already in use: {}", address);
-                std::process::exit(-1);
-            }
-            Err(err) => {
-                error!("Failed starting server: {}", err);
-                std::process::exit(-1);
-            }
-        };
-
-        debug!("Server bound to: {}", address);
-
-        let poller = Poll::new().unwrap_or_else(|_| {
-            error!("Failed creating poller.");
-            std::process::exit(-1);
-        });
-        debug!("Successfully created poller.");
-
-        poller
-            .registry()
-            .register(&mut listener_binding, SERVER_TOKEN, Interest::READABLE)
-            .unwrap_or_else(|_| {
-                error!("Failed registering server to poller.");
-                std::process::exit(-1);
-            });
-        debug!("Successfully registered server to poller.");
-
+    // Creates a fresh unbinded instance of the server.
+    pub fn new() -> Self {
         Self {
-            address,
-            listener: listener_binding,
+            address: None,
+            listener: None,
+            poller: None,
             data_store: HashMap::new(),
-            poller,
             connections_store: HashMap::new(),
         }
     }
 
-    pub fn address(&self) -> SocketAddr {
+    // Creates a new instance of the server and binds it to the address.
+    pub fn bootstrap(address: SocketAddr) -> Self {
+        let mut server = Self::new();
+        server.set_address(address);
+        server.bind()
+    }
+
+    // Binds the server to the address already tied to the instance.
+    pub fn bind(self) -> Self {
+        if let Some(address) = self.address {
+            let mut listener_binding = match TcpListener::bind(address) {
+                Ok(listener) => listener,
+                Err(err) if err.kind() == io::ErrorKind::AddrInUse => {
+                    error!("Address already in use: {}", address);
+                    std::process::exit(-1);
+                }
+                Err(err) => {
+                    error!("Failed starting server: {}", err);
+                    std::process::exit(-1);
+                }
+            };
+
+            debug!("Server bound to: {}", address);
+
+            let poller = Poll::new().unwrap_or_else(|_| {
+                error!("Failed creating poller.");
+                std::process::exit(-1);
+            });
+
+            poller
+                .registry()
+                .register(&mut listener_binding, SERVER_TOKEN, Interest::READABLE)
+                .unwrap_or_else(|_| {
+                    error!("Failed registering server to poller.");
+                    std::process::exit(-1);
+                });
+
+            Self {
+                address: Some(address),
+                listener: Some(listener_binding),
+                poller: Some(poller),
+                data_store: self.data_store,
+                connections_store: self.connections_store,
+            }
+        } else {
+            error!("Server address is not set.");
+            std::process::exit(-1);
+        }
+    }
+
+    pub fn address(&self) -> Option<SocketAddr> {
         self.address
     }
 
-    /// Start the server and listen for incoming connections.
-    pub fn listen(&mut self) -> Result<(), io::Error> {
-        info!("Server listening on: {}", self.address());
+    pub fn set_address(&mut self, address: SocketAddr) {
+        self.address = Some(address);
+    }
+
+    // Listen for incoming connections.
+    pub fn listen(mut self) -> Result<(), io::Error> {
+        if self.address.is_none() {
+            error!("Server hasn't been initialized.");
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Server address is not set.",
+            ));
+        }
+
+        info!("Server listening on: {}", self.address().unwrap());
         let mut events_store = Events::with_capacity(1024);
         // Unique token for each connection
         let unique_token = Token(SERVER_TOKEN.0 + 1);
 
         loop {
             debug!("Polling for events...");
-            if let Err(e) = self.poller.poll(&mut events_store, None) {
+            if let Err(e) = self.poller.as_mut().unwrap().poll(&mut events_store, None) {
                 if e.kind() == io::ErrorKind::Interrupted {
                     debug!("Polling interrupted.");
                     continue;
@@ -93,26 +135,28 @@ impl Server {
             for event in events_store.iter() {
                 match event.token() {
                     SERVER_TOKEN => {
-                        let (mut connection, address) = match self.listener.accept() {
-                            Ok((connection, addr)) => (connection, addr),
-                            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                                // If we get a `WouldBlock` error we know our
-                                // listener has no more incoming connections queued,
-                                // so we can return to polling and wait for some
-                                // more.
-                                debug!("No more incoming connections, returning to polling.");
-                                break;
-                            }
-                            Err(e) => {
-                                error!("Failed accepting connection: {}", e);
-                                return Err(e);
-                            }
-                        };
+                        debug!("Handling server event: {:?}", event);
+                        let (mut connection, address) =
+                            match self.listener.as_ref().unwrap().accept() {
+                                Ok((connection, addr)) => (connection, addr),
+                                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                                    // If we get a `WouldBlock` error we know our
+                                    // listener has no more incoming connections queued,
+                                    // so we can return to polling and wait for some
+                                    // more.
+                                    debug!("No more incoming connections, returning to polling.");
+                                    break;
+                                }
+                                Err(e) => {
+                                    error!("Failed accepting connection: {}", e);
+                                    return Err(e);
+                                }
+                            };
 
                         info!("Accepted connection from: {}", address);
 
                         let connection_token = Token(unique_token.0 + self.connections_store.len());
-                        self.poller.registry().register(
+                        self.poller.as_ref().unwrap().registry().register(
                             &mut connection,
                             connection_token,
                             Interest::READABLE,
@@ -124,8 +168,8 @@ impl Server {
                         // hangs and doesn't receive any response from the server.
                         // I don't know why this happens, but reregistering the
                         // listener fixes it.
-                        self.poller.registry().reregister(
-                            &mut self.listener,
+                        self.poller.as_ref().unwrap().registry().reregister(
+                            self.listener.as_mut().unwrap(),
                             SERVER_TOKEN,
                             Interest::READABLE,
                         )?;
@@ -146,10 +190,10 @@ impl Server {
 
                             Ok(_) => false,
                             Err(e) if e.kind() == io::ErrorKind::Interrupted => false,
-                            Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => false,
 
                             // Connection is done only if we get the following errors.
                             // I don't know if this is the best way to handle this. But it works.
+                            Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => true,
                             Err(e) if e.kind() == io::ErrorKind::ConnectionReset => true,
                             Err(e) if e.kind() == io::ErrorKind::ConnectionAborted => true,
                             Err(e) if e.kind() == io::ErrorKind::BrokenPipe => true,
@@ -160,7 +204,11 @@ impl Server {
                         if done {
                             if let Some(mut conn) = self.connections_store.remove(&token) {
                                 info!("Connection closed: {}", conn.ip);
-                                self.poller.registry().deregister(&mut conn.connection)?;
+                                self.poller
+                                    .as_ref()
+                                    .unwrap()
+                                    .registry()
+                                    .deregister(&mut conn.connection)?;
                                 continue;
                             }
 
@@ -200,7 +248,7 @@ impl Server {
                     response = RawResponse::new(StatusCodes::Ok, None);
                 }
                 Command::Delete(key) => {
-                    if let None = self.data_store.remove(key) {
+                    if self.data_store.remove(key).is_none() {
                         response = RawResponse::new(StatusCodes::ErrNotFound, None);
                     } else {
                         response = RawResponse::new(StatusCodes::Ok, None);
@@ -214,12 +262,12 @@ impl Server {
                 e
             })?;
             connection.flush()?;
-            debug!("Successfully wrote response.");
 
-            self.poller
-                .registry()
-                .reregister(connection, event.token(), Interest::READABLE)?;
-            debug!("Successfully reregistered connection.");
+            self.poller.as_ref().unwrap().registry().reregister(
+                connection,
+                event.token(),
+                Interest::READABLE,
+            )?;
 
             return Ok(());
         }
@@ -243,10 +291,11 @@ impl Server {
                 }
             };
 
-            self.poller
-                .registry()
-                .reregister(connection, event.token(), Interest::WRITABLE)?;
-            debug!("Successfully reregistered connection.");
+            self.poller.as_mut().unwrap().registry().reregister(
+                connection,
+                event.token(),
+                Interest::WRITABLE,
+            )?;
 
             self.connections_store
                 .entry(event.token())
