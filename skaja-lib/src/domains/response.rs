@@ -8,8 +8,6 @@ pub trait ReadToResponse {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum StatusCodes {
     Ok,
-    ClientErr,
-    ServerErr,
     ErrNotFound,
 }
 
@@ -17,8 +15,6 @@ impl std::fmt::Display for StatusCodes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let msg = match self {
             StatusCodes::Ok => "OK",
-            StatusCodes::ClientErr => "Client error",
-            StatusCodes::ServerErr => "Server error",
             StatusCodes::ErrNotFound => "Key not found",
         };
 
@@ -30,8 +26,6 @@ impl From<StatusCodes> for u32 {
     fn from(value: StatusCodes) -> Self {
         match value {
             StatusCodes::Ok => 0,
-            StatusCodes::ClientErr => 1,
-            StatusCodes::ServerErr => 2,
             StatusCodes::ErrNotFound => 3,
         }
     }
@@ -41,8 +35,6 @@ impl From<u32> for StatusCodes {
     fn from(value: u32) -> Self {
         match value {
             0 => StatusCodes::Ok,
-            1 => StatusCodes::ClientErr,
-            2 => StatusCodes::ServerErr,
             3 => StatusCodes::ErrNotFound,
             _ => panic!("Invalid status code."),
         }
@@ -164,8 +156,6 @@ impl std::fmt::Display for Response {
                 }
             }
             StatusCodes::ErrNotFound => "<nil>",
-            StatusCodes::ClientErr => "<Client error>",
-            StatusCodes::ServerErr => "<Server error>",
         };
 
         let msg = msg.to_string();
@@ -194,32 +184,9 @@ mod raw_response {
     }
 
     #[test]
-    pub fn new_client_err_should_result_in_correct_payload() {
-        let raw_response = RawResponse::new(
-            StatusCodes::ClientErr,
-            Some(r#"Key "testing" not found."#.to_string()),
-        );
-        let payload = raw_response.payload();
-
-        let header = &payload[0..4];
-        let msg_header = &payload[4..8];
-        let msg = &payload[8..];
-
-        assert_eq!(payload.len(), 32);
-        assert_eq!(header, [1, 0, 0, 0]);
-        assert_eq!(msg_header, [24, 0, 0, 0]);
-        assert_eq!(
-            msg,
-            [
-                75, 101, 121, 32, 34, 116, 101, 115, 116, 105, 110, 103, 34, 32, 110, 111, 116, 32,
-                102, 111, 117, 110, 100, 46
-            ]
-        );
-    }
-
-    #[test]
-    pub fn new_server_err_should_result_in_correct_payload() {
-        let raw_response = RawResponse::new(StatusCodes::ServerErr, Some(r#"Server error"#.into()));
+    pub fn new_not_found_err_should_result_in_correct_payload() {
+        let raw_response =
+            RawResponse::new(StatusCodes::ErrNotFound, Some(r#"Server error"#.into()));
         let payload = raw_response.payload();
 
         let header = &payload[0..4];
@@ -227,7 +194,7 @@ mod raw_response {
         let msg = &payload[8..];
 
         assert_eq!(payload.len(), 20);
-        assert_eq!(header, [2, 0, 0, 0]);
+        assert_eq!(header, [3, 0, 0, 0]);
         assert_eq!(msg_header, [12, 0, 0, 0]);
         assert_eq!(
             msg,
@@ -247,19 +214,10 @@ mod raw_response {
     #[test]
     pub fn client_err_should_be_parsed_correctly_to_response() {
         let raw_response =
-            RawResponse::new(StatusCodes::ClientErr, Some("There's an error".into()));
+            RawResponse::new(StatusCodes::ErrNotFound, Some("There's an error".into()));
         let response: Response = raw_response.into();
 
-        assert_eq!(response.status_code(), StatusCodes::ClientErr);
+        assert_eq!(response.status_code(), StatusCodes::ErrNotFound);
         assert_eq!(response.message(), Some("There's an error"));
-    }
-
-    #[test]
-    pub fn server_err_should_be_parsed_correctly_to_response() {
-        let raw_response = RawResponse::new(StatusCodes::ServerErr, Some("Server error".into()));
-        let response: Response = raw_response.into();
-
-        assert_eq!(response.status_code(), StatusCodes::ServerErr);
-        assert_eq!(response.message(), Some("Server error"));
     }
 }
