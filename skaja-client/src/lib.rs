@@ -1,6 +1,6 @@
 use core::panic;
 use mio::{net::TcpStream, Events, Interest, Poll};
-use skaja_lib::{Command, ReadToRequest, ReadToResponse, Response, CLIENT_TOKEN};
+use skaja_lib::{Command, OutOf, RawResponse, Request, Response, CLIENT_TOKEN};
 use std::{
     io::{self, Write},
     net::SocketAddr,
@@ -38,7 +38,7 @@ impl Client {
     }
 
     pub fn send(&mut self, mut command: Command) -> Result<Response, io::Error> {
-        let request = command.read_to_request()?;
+        let request = Request::outof(&mut command)?;
 
         let mut events = Events::with_capacity(1);
 
@@ -58,7 +58,7 @@ impl Client {
                 }
 
                 if event.is_readable() {
-                    let response: Response = self.connection.read_to_response()?.into();
+                    let response: Response = RawResponse::outof(&mut self.connection)?.into();
                     self.poller.registry().reregister(
                         &mut self.connection,
                         CLIENT_TOKEN,

@@ -28,6 +28,10 @@ pub struct Request {
 
     /// The position of the pointer in the payload.
     /// This is used to parse the payload into a [`Command`] struct.
+    ///
+    /// Usually the initial value is 4, because the first 4 bytes are the header,
+    /// which is the number of messages in the payload, so we skip them and point
+    /// straight to the data.
     pointer_pos: usize,
 }
 

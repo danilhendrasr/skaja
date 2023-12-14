@@ -3,7 +3,7 @@ use mio::{
     net::{TcpListener, TcpStream},
     Events, Interest, Poll, Token,
 };
-use skaja_lib::{Command, RawResponse, ReadToRequest, StatusCodes, SERVER_TOKEN};
+use skaja_lib::{Command, OutOf, RawResponse, Request, StatusCodes, SERVER_TOKEN};
 use std::{
     collections::HashMap,
     default::Default,
@@ -254,6 +254,9 @@ impl Server {
                         response = RawResponse::new(StatusCodes::Ok, None);
                     }
                 }
+                Command::NewSet(_) => {
+                    response = RawResponse::new(StatusCodes::Ok, None);
+                }
             }
 
             let payload: Vec<u8> = response.into();
@@ -274,7 +277,8 @@ impl Server {
 
         if event.is_readable() {
             debug!("Handling readable event.");
-            let request = connection.read_to_request().map_err(|e| {
+
+            let request = Request::outof(connection).map_err(|e| {
                 error!("Failed parsing payload to Request: {:?}", e);
                 e
             })?;

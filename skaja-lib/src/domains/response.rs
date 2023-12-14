@@ -1,10 +1,3 @@
-use std::io;
-
-pub trait ReadToResponse {
-    /// Reads target into a [`RawResponse`] struct without taking ownership of the target.
-    fn read_to_response(&mut self) -> Result<RawResponse, io::Error>;
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum StatusCodes {
     Ok,
@@ -63,13 +56,13 @@ impl RawResponse {
 
         // The length of the status code string, truncated to 32bit.
         let status_code_int: u32 = status_code.into();
-        payload.append(&mut status_code_int.to_ne_bytes().to_vec());
+        payload.append(&mut status_code_int.to_le_bytes().to_vec());
 
         if let Some(msg) = msg {
             // Status code + the number of arguments for the command
             let msg_len = msg.len() as u32;
 
-            payload.append(&mut msg_len.to_ne_bytes().to_vec());
+            payload.append(&mut msg_len.to_le_bytes().to_vec());
             payload.append(&mut msg.into_bytes());
 
             return RawResponse(payload);
@@ -77,7 +70,7 @@ impl RawResponse {
 
         let msg_len = 0_u32;
         let msg = "".to_string();
-        payload.append(&mut msg_len.to_ne_bytes().to_vec());
+        payload.append(&mut msg_len.to_le_bytes().to_vec());
         payload.append(&mut msg.into_bytes());
         RawResponse(payload)
     }
