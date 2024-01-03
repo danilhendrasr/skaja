@@ -1,10 +1,4 @@
 use super::command::Command;
-use std::io;
-
-pub trait ReadToRequest {
-    /// Reads target into a [`Request`] struct without taking ownership of the target.
-    fn read_to_request(&mut self) -> Result<Request, io::Error>;
-}
 
 #[derive(Debug, PartialEq)]
 pub struct Request {

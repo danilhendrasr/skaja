@@ -65,71 +65,6 @@ impl TryFrom<String> for Command {
     }
 }
 
-#[cfg(test)]
-mod command_from_string {
-    use crate::Command;
-
-    #[test]
-    pub fn valid_string_should_parses_to_command() {
-        let command = Command::try_from("get key".to_string()).unwrap();
-        assert_eq!(command, Command::Get("key".to_owned()));
-
-        let command = Command::try_from("set key value".to_string()).unwrap();
-        assert_eq!(command, Command::Set("key".to_owned(), "value".to_owned()));
-
-        let command = Command::try_from("del key".to_string()).unwrap();
-        assert_eq!(command, Command::Delete("key".to_owned()));
-    }
-
-    #[test]
-    pub fn valid_string_but_in_uppercase_should_parses_to_command_in_lowercase() {
-        let command = Command::try_from("GET KEY".to_string()).unwrap();
-        assert_eq!(command, Command::Get("key".to_owned()));
-
-        let command = Command::try_from("SET key Value".to_string()).unwrap();
-        assert_eq!(command, Command::Set("key".to_owned(), "value".to_owned()));
-
-        let command = Command::try_from("DEL key".to_string()).unwrap();
-        assert_eq!(command, Command::Delete("key".to_owned()));
-    }
-
-    #[test]
-    #[should_panic]
-    pub fn invalid_string_should_result_in_err() {
-        Command::try_from("invalid command".to_string()).unwrap();
-    }
-
-    #[test]
-    #[should_panic]
-    pub fn get_command_without_key_should_result_in_err() {
-        Command::try_from("get".to_string()).unwrap();
-    }
-
-    #[test]
-    #[should_panic]
-    pub fn set_command_without_key_should_result_in_err() {
-        Command::try_from("set".to_string()).unwrap();
-    }
-
-    #[test]
-    #[should_panic]
-    pub fn set_command_without_value_should_result_in_err() {
-        Command::try_from("set key".to_string()).unwrap();
-    }
-
-    #[test]
-    #[should_panic]
-    pub fn del_command_without_key_should_result_in_err() {
-        Command::try_from("del".to_string()).unwrap();
-    }
-
-    #[test]
-    #[should_panic]
-    pub fn empty_string_should_result_in_err() {
-        Command::try_from("".to_string()).unwrap();
-    }
-}
-
 impl TryFrom<Args> for Command {
     type Error = String;
 
@@ -239,6 +174,71 @@ impl Extract<Request> for Command {
         }
 
         Ok(Request::new_with_payload(payload))
+    }
+}
+
+#[cfg(test)]
+mod command_from_string {
+    use crate::Command;
+
+    #[test]
+    pub fn valid_string_should_parses_to_command() {
+        let command = Command::try_from("get key".to_string()).unwrap();
+        assert_eq!(command, Command::Get("key".to_owned()));
+
+        let command = Command::try_from("set key value".to_string()).unwrap();
+        assert_eq!(command, Command::Set("key".to_owned(), "value".to_owned()));
+
+        let command = Command::try_from("del key".to_string()).unwrap();
+        assert_eq!(command, Command::Delete("key".to_owned()));
+    }
+
+    #[test]
+    pub fn valid_string_but_in_uppercase_should_parses_to_command_in_lowercase() {
+        let command = Command::try_from("GET KEY".to_string()).unwrap();
+        assert_eq!(command, Command::Get("key".to_owned()));
+
+        let command = Command::try_from("SET key Value".to_string()).unwrap();
+        assert_eq!(command, Command::Set("key".to_owned(), "value".to_owned()));
+
+        let command = Command::try_from("DEL key".to_string()).unwrap();
+        assert_eq!(command, Command::Delete("key".to_owned()));
+    }
+
+    #[test]
+    #[should_panic]
+    pub fn invalid_string_should_result_in_err() {
+        Command::try_from("invalid command".to_string()).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    pub fn get_command_without_key_should_result_in_err() {
+        Command::try_from("get".to_string()).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    pub fn set_command_without_key_should_result_in_err() {
+        Command::try_from("set".to_string()).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    pub fn set_command_without_value_should_result_in_err() {
+        Command::try_from("set key".to_string()).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    pub fn del_command_without_key_should_result_in_err() {
+        Command::try_from("del".to_string()).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    pub fn empty_string_should_result_in_err() {
+        Command::try_from("".to_string()).unwrap();
     }
 }
 
