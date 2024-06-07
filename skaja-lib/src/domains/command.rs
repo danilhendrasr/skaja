@@ -2,19 +2,11 @@ use super::Request;
 use crate::Extract;
 use std::{env::Args, io};
 
-#[derive(Debug, PartialEq)]
-pub struct SetCommand {
-    key: String,
-    value: String,
-    expiration: Option<u64>,
-}
-
 /// The commands that can be sent to the server.
 #[derive(Debug, PartialEq)]
 pub enum Command {
     Get(String),
     Set(String, String),
-    NewSet(SetCommand),
     Delete(String),
 }
 
@@ -118,20 +110,11 @@ impl Extract<Request> for Command {
         let args_len = match self {
             Command::Get(_) | Command::Delete(_) => 1,
             Command::Set(_, _) => 2,
-            Command::NewSet(ref set_command) => {
-                let mut args_len = 2;
-                if set_command.expiration.is_some() {
-                    args_len += 1;
-                }
-
-                args_len
-            }
         };
 
         let command = match self {
             Command::Get(_) => "get",
             Command::Set(_, _) => "set",
-            Command::NewSet(_) => "newset",
             Command::Delete(_) => "del",
         };
 
@@ -156,20 +139,6 @@ impl Extract<Request> for Command {
                 let value_len = value.len() as u32;
                 payload.append(&mut value_len.to_le_bytes().into());
                 payload.append(&mut value.clone().into_bytes());
-            }
-            Command::NewSet(set_command) => {
-                let key_len = set_command.key.len() as u32;
-                payload.append(&mut key_len.to_le_bytes().into());
-                payload.append(&mut set_command.key.clone().into());
-
-                let value_len = set_command.value.len() as u32;
-                payload.append(&mut value_len.to_le_bytes().into());
-                payload.append(&mut set_command.value.clone().into());
-
-                if let Some(expiration) = set_command.expiration {
-                    let expiration = expiration as u32;
-                    payload.append(&mut expiration.to_le_bytes().into());
-                }
             }
         }
 
@@ -293,59 +262,6 @@ mod extract_request_from_command {
         expected_payload.append(&mut "del".into());
         expected_payload.append(&mut 3_u32.to_le_bytes().into());
         expected_payload.append(&mut "key".into());
-
-        let expected_request = Request::new_with_payload(expected_payload);
-
-        assert_eq!(request, expected_request);
-    }
-
-    #[test]
-    pub fn newset_command_wo_expiration_should_properly_converted_to_request() {
-        let mut command = Command::NewSet(crate::SetCommand {
-            key: "key".to_string(),
-            value: "value".to_string(),
-            expiration: None,
-        });
-
-        let request = command.extract().unwrap();
-
-        let mut expected_payload: Vec<u8> = Vec::new();
-        expected_payload.append(&mut 3_u32.to_le_bytes().into());
-        expected_payload.append(&mut 6_u32.to_le_bytes().into());
-        expected_payload.append(&mut "newset".into());
-        expected_payload.append(&mut 3_u32.to_le_bytes().into());
-        expected_payload.append(&mut "key".into());
-        expected_payload.append(&mut 5_u32.to_le_bytes().into());
-        expected_payload.append(&mut "value".into());
-
-        let expected_request = Request::new_with_payload(expected_payload);
-
-        assert_eq!(request, expected_request);
-    }
-
-    #[test]
-    pub fn newset_command_w_expiration_should_properly_converted_to_request() {
-        let mut command = Command::NewSet(crate::SetCommand {
-            key: "key".to_string(),
-            value: "value".to_string(),
-            expiration: Some(64),
-        });
-
-        let request = command.extract().unwrap();
-
-        let mut expected_payload: Vec<u8> = Vec::new();
-        expected_payload.append(&mut 4_u32.to_le_bytes().into());
-
-        expected_payload.append(&mut 6_u32.to_le_bytes().into());
-        expected_payload.append(&mut "newset".into());
-
-        expected_payload.append(&mut 3_u32.to_le_bytes().into());
-        expected_payload.append(&mut "key".into());
-
-        expected_payload.append(&mut 5_u32.to_le_bytes().into());
-        expected_payload.append(&mut "value".into());
-
-        expected_payload.append(&mut 64_u32.to_le_bytes().into());
 
         let expected_request = Request::new_with_payload(expected_payload);
 

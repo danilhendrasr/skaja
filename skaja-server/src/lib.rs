@@ -254,9 +254,6 @@ impl Server {
                         response = RawResponse::new(StatusCodes::Ok, None);
                     }
                 }
-                Command::NewSet(_) => {
-                    response = RawResponse::new(StatusCodes::Ok, None);
-                }
             }
 
             let payload: Vec<u8> = response.into();
