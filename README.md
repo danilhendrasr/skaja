@@ -1,9 +1,10 @@
 # Skaja
 
 The name comes from translating what "Redis" stands for --Remote Dictionary Server--
-into Indonesian, which becomes "Server Kamus Jarak Jauh" or Skaja for short.
+into Indonesian, which becomes "Server Kamus Jarak Jauh" or Skaja for short. Ikr, what a goofy ahh name. 
 
-Ikr, what a goofy ahh name.
+But actually it's not really a Redis clone, but a key-value store built utilizing low-level
+evented I/O interfaces.
 
 ## Communication Protocol
 
